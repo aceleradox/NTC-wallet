@@ -1,0 +1,51 @@
+📌 ARQUIVOS PARA REMOVER DO GitHub
+
+==============================================
+
+Para GitHub Pages + Codespaces, você SÓ PRECISA:
+
+✅ MANTER (Essencial):
+  ✓ Correção-de-HTML-e-React.html
+  ✓ server.js
+  ✓ database.js
+  ✓ config.js
+  ✓ package.json
+  ✓ README.md
+  ✓ BACKEND.md (renomear de BACKEND_README_UPDATED.md)
+  ✓ .gitignore
+  ✓ GITHUB_SETUP.md (instruções)
+
+❌ PODE REMOVER (Redundante):
+  ✗ BACKEND_README.md (velho)
+  ✗ GUIA_RÁPIDO.md (local)
+  ✗ INSTALACAO_CORRIGIDA.txt (Windows)
+  ✗ INSTALAR_CORRIGIDO.bat (Windows)
+  ✗ START.bat (Windows)
+  ✗ TESTAR.bat (Windows)
+  ✗ RESUMO_CORRECAO.txt (redundante)
+  ✗ TEST.html (teste local)
+  ✗ LEIA_PRIMEIRO.txt (redundante)
+  ✗ README-GITHUB.md (este arquivo)
+  ✗ node_modules/ (git ignora)
+  ✗ ntc-wallet.json (git ignora)
+
+==============================================
+
+COMO FAZER:
+
+1. Abra pasta local do projeto
+2. Delete os arquivos da lista "REMOVER"
+3. Renomeie: BACKEND_README_UPDATED.md → BACKEND.md
+4. Execute:
+   git add -A
+   git commit -m "cleanup: remove unnecessary files"
+   git push
+
+==============================================
+
+RESULTADO FINAL:
+
+Repo limpo, 8 arquivos essenciais.
+GitHub Pages + Codespaces prontos!
+
+==============================================

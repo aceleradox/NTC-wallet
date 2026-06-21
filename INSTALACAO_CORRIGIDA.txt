@@ -1,0 +1,102 @@
+🔧 ERRO RESOLVIDO - INSTRUÇÕES PARA npm install
+
+================================================
+
+❌ ERRO ANTERIOR:
+"gyp ERR! Could not find any Visual Studio installation to use"
+
+✅ CAUSA:
+better-sqlite3 é um módulo nativo (C++) que precisa compilar
+
+✅ SOLUÇÃO IMPLEMENTADA:
+Substituído por armazenamento em JSON (JavaScript puro)
+Agora funciona SEM Visual Studio, SEM build tools, SEM compilação!
+
+================================================
+
+📋 PARA FAZER FUNCIONAR AGORA:
+
+1. Abra um terminal na pasta do projeto:
+   cd "C:\Users\Power\Desktop\projetos\!ntc wallet"
+
+2. LIMPE a instalação anterior:
+   rmdir /s node_modules
+   del package-lock.json
+
+3. Instale novamente (vai funcionar em segundos):
+   npm install
+
+4. Se funcionar, você verá:
+   added XX packages in Y seconds
+   (sem erros!)
+
+5. Inicie o servidor:
+   npm start
+
+6. Se der sucesso, você verá:
+   ╔════════════════════════════════════════════╗
+   ║  NTC Wallet Backend Server                  ║
+   ║  ✓ Express + JSON Storage                   ║
+   ║  ✓ Porta: 3000                              ║
+   ║  ✓ API: http://localhost:3000/api/health   ║
+   ╚════════════════════════════════════════════╝
+
+================================================
+
+✅ O QUE MUDOU NO PROJETO:
+
+REMOVIDO:
+- better-sqlite3 (módulo nativo, precisa compilar)
+- package.json antigo
+
+ADICIONADO:
+- database.js novo (sem SQLite, usa JSON)
+- Banco de dados: ntc-wallet.json (arquivo simples)
+
+RESULTADO:
+- ✅ npm install funciona sempre
+- ✅ Sem dependências nativas
+- ✅ Windows, Mac, Linux - tudo funciona igual
+- ✅ Deploy fácil (Vercel, Heroku, etc)
+
+================================================
+
+🔍 TESTANDO O BACKEND:
+
+Depois de rodar "npm start", em outro terminal:
+
+curl http://localhost:3000/api/health
+
+Você deve ver:
+{"status":"NTC Wallet Backend ativo","timestamp":"2026-06-21T..."}
+
+================================================
+
+💾 BANCO DE DADOS:
+
+Antes: ntc-wallet.db (SQLite - precisa compilar)
+Agora: ntc-wallet.json (Arquivo JSON normal)
+
+Você pode editar o JSON manualmente se quiser!
+
+================================================
+
+❓ DÚVIDAS:
+
+P: Perdi meus dados?
+R: Não, você terá uma nova conta. Modo LOCAL still works!
+
+P: Pode voltar a usar SQLite?
+R: Sim, mas recomendo deixar como está (funciona melhor).
+
+P: E se der erro de novo?
+R: Delete node_modules + package-lock.json e rode npm install novamente
+
+================================================
+
+Agora é só correr pro abraço! 🚀
+
+Próximo passo:
+npm start
+
+Sucesso!

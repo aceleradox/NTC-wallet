@@ -1,0 +1,2102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NTC Wallet - Notoriety Coin Portal & Cyber Dashboard</title>
+  
+  <!-- Tailwind CSS para design cyberpunk moderno -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- CDNs via Cloudflare (cdnjs) - Ultra estáveis e de alta performance -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.321.0/umd/lucide.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.0/babel.min.js"></script>
+  
+  <!-- Config do Backend NTC (Opcional) -->
+  <script src="./config.js"></script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap');
+    
+    body {
+      font-family: 'Rajdhani', sans-serif;
+      background-color: #06060c;
+    }
+
+    .font-orbitron {
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    /* Animações de brilho e pulso */
+    @keyframes spin-slow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .animate-spin-slow {
+      animation: spin-slow 12s linear infinite;
+    }
+
+    /* Scrollbar cyberpunk */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0b0b14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #25103c;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #db2777;
+    }
+  </style>
+
+  <!-- Escudo de Erros Global para diagnosticar falhas de inicialização -->
+  <script>
+    window.addEventListener('error', function(event) {
+      const root = document.getElementById('root');
+      if (root && (!root.children || root.children.length === 0)) {
+        root.innerHTML = `
+          <div class="min-h-screen flex items-center justify-center p-6 bg-[#06060c] text-white">
+            <div class="max-w-md w-full bg-[#0c0c16] border border-red-500/50 rounded-2xl p-6 shadow-xl">
+              <h3 class="text-xl font-bold text-red-400 font-orbitron mb-2">Falha crítica de inicialização</h3>
+              <pre class="bg-black/50 p-4 rounded-xl border border-red-950 overflow-x-auto text-xs text-red-300 mb-4 whitespace-pre-wrap">${event.message || 'Erro de compilação ou script externo.'}</pre>
+              <button onclick="window.location.reload()" class="w-full py-2 bg-red-600 hover:bg-red-500 rounded-xl transition">Tentar Novamente</button>
+            </div>
+          </div>
+        `;
+      }
+    });
+  </script>
+</head>
+<body class="text-gray-100 min-h-screen flex flex-col justify-between">
+
+  <!-- Container principal do React -->
+  <div id="root" class="flex-grow flex flex-col"></div>
+
+  <!-- Carregamento Modular do Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, addDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    window.FirebaseSDK = {
+      initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+      getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, addDoc, getDocs, deleteDoc
+    };
+
+    // Avisa ao sistema que os SDKs carregaram
+    window.dispatchEvent(new Event('firebase-sdk-loaded'));
+  </script>
+
+  <!-- Script da aplicação React -->
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef } = React;
+
+    const MNEMONIC_WORDS = [
+      "matrix", "net", "cyber", "token", "neon", "flow", "delta", "fusion", 
+      "protocol", "node", "quantum", "sync", "hash", "link", "grid", "shield", 
+      "code", "engine", "plasma", "vortex", "acelera", "notoriety", "glow", "wallet"
+    ];
+
+    const SHOP_ITEMS = {
+      neonThemes: { price: 5.0, label: "Temas Neon Customizados", desc: "Mude a cor principal de todos os glows do app." },
+      socialCards: { price: 2.0, label: "Widgets do Insta & TikTok", desc: "Exiba e edite suas redes sociais diretamente." },
+      youtubePlayer: { price: 10.0, label: "Player de Música YouTube", desc: "Ouça batidas lofi e tracks direto no painel." },
+      qqFrevo: { price: 15.0, label: "QQFrevo Event Locator", desc: "Buscador de resenhas e frevos em Pernambuco." },
+      resenhasOrganizer: { price: 8.0, label: "Organizador de Resenhas", desc: "Gerencie convidados, insumos e finanças de festas." },
+      notes: { price: 3.0, label: "Mural de Notas Rápidas", desc: "Crie post-its de recados neon na sua tela." },
+      calendar: { price: 4.0, label: "Calendário Interativo", desc: "Visualize o fluxo das suas datas importantes." },
+      drinksPromo: { price: 12.0, label: "Promoção de Bebidas", desc: "Acesse promoções e use NTC para resgatar cupons." },
+      fusionEngine: { price: 10.0, label: "Desbloqueio Reator de Fusão", desc: "Habilita o motor ultra de 15 NTC por hora." }
+    };
+
+    function App() {
+      // --- SISTEMA E CONEXÃO ---
+      const [firebaseReady, setFirebaseReady] = useState(false);
+      const [isOfflineMode, setIsOfflineMode] = useState(false);
+      const [showConfigModal, setShowConfigModal] = useState(false);
+      const [customConfigInput, setCustomConfigInput] = useState('');
+      const [firebaseError, setFirebaseError] = useState('');
+      
+      const [firebaseInstance, setFirebaseInstance] = useState(null);
+      const [fbUser, setFbUser] = useState(null); 
+
+      // --- ESTADOS DA CARTEIRA & USUÁRIO ---
+      const [user, setUser] = useState(null); 
+      const [walletAddress, setWalletAddress] = useState('');
+      const [balance, setBalance] = useState(0.00);
+      const [history, setHistory] = useState([]);
+      const [activeTab, setActiveTab] = useState('auth'); 
+      const [syncedCloud, setSyncedCloud] = useState(false);
+
+      // Envio de moedas com validação em tempo real
+      const [sendTargetAddress, setSendTargetAddress] = useState('');
+      const [sendAmount, setSendAmount] = useState('');
+      const [targetUserFound, setTargetUserFound] = useState(null); 
+      const [isValidatingAddress, setIsValidatingAddress] = useState(false);
+
+      // Autenticação Segura por Frase Semente
+      const [authMode, setAuthMode] = useState('login'); 
+      const [seedPhraseInput, setSeedPhraseInput] = useState('');
+      const [generatedSeed, setGeneratedSeed] = useState('');
+      const [username, setUsername] = useState('');
+      const [authError, setAuthError] = useState('');
+
+      // Toast de notificações
+      const [toast, setToast] = useState(null);
+
+      // --- ESTADOS DO FARM ---
+      const [isSpinning, setIsSpinning] = useState(false);
+      const [spinCooldown, setSpinCooldown] = useState(0);
+      const [spinResult, setSpinResult] = useState(null);
+      const spinRotation = useRef(0);
+
+      const [engines, setEngines] = useState({
+        solar: { active: false, timeLeft: 0, duration: 5 * 60, reward: 0.5, accumulated: 0, label: "NTC Solar Harvester" },
+        quantum: { active: false, timeLeft: 0, duration: 30 * 60, reward: 4.0, accumulated: 0, label: "Quantum Engine" },
+        fusion: { active: false, timeLeft: 0, duration: 60 * 60, reward: 15.0, accumulated: 0, label: "Fusion NTC Reactor" }
+      });
+
+      // --- ESTADOS DE CUSTOMIZAÇÃO CYBER ---
+      const [unlockedFeatures, setUnlockedFeatures] = useState({
+        neonThemes: false,
+        socialCards: false,
+        youtubePlayer: false,
+        qqFrevo: false,
+        resenhasOrganizer: false,
+        notes: false,
+        calendar: false,
+        drinksPromo: false,
+        fusionEngine: false
+      });
+
+      const [activeNeon, setActiveNeon] = useState('purple'); 
+      const [profileBio, setProfileBio] = useState('Nômade da Rede AceleraNet e Minerador de NTC.');
+      const [socialLinks, setSocialLinks] = useState({ insta: '', tiktok: '' });
+      const [youtubeId, setYoutubeId] = useState('5qap5aO4i9A'); 
+      const [youtubeInput, setYoutubeInput] = useState('https://www.youtube.com/watch?v=5qap5aO4i9A');
+      const [notesList, setNotesList] = useState([]);
+      const [newNoteText, setNewNoteText] = useState('');
+      const [parties, setParties] = useState([]);
+
+      // --- MURAL DE RELATOS ---
+      const [homeReviews, setHomeReviews] = useState([]);
+      const [newReview, setNewReview] = useState({
+        title: '',
+        host: '',
+        vibe: 5,
+        reviewText: '',
+        consented: false
+      });
+
+      // --- SEO ---
+      const [seoAuths, setSeoAuths] = useState({
+        googleCrawler: false,
+        openGraph: false,
+        analyticsTracker: false
+      });
+
+      // --- ESTADOS DE INTEGRAÇÃO EXTERNA (MESSAGING API) ---
+      const [pendingRequests, setPendingRequests] = useState([]);
+
+      // --- GERADOR EMBED ---
+      const [embedType, setEmbedType] = useState('send');
+      const [embedWallet, setEmbedWallet] = useState('');
+      const [embedAmount, setEmbedAmount] = useState('1.0');
+
+      // Paletas Cyber Neon
+      const neonClasses = {
+        purple: { border: 'border-purple-500/50', glow: 'shadow-[0_0_15px_rgba(167,139,250,0.4)]', text: 'text-purple-400', bg: 'bg-purple-600', shadow: 'rgba(167, 139, 250, 0.3)', bgTo: 'from-purple-950/80 to-indigo-950/80', hoverBg: 'hover:bg-purple-500' },
+        pink: { border: 'border-pink-500/50', glow: 'shadow-[0_0_15px_rgba(236,72,153,0.4)]', text: 'text-pink-400', bg: 'bg-pink-600', shadow: 'rgba(236, 72, 153, 0.4)', bgTo: 'from-pink-950/80 to-rose-950/80', hoverBg: 'hover:bg-pink-500' },
+        green: { border: 'border-emerald-500/50', glow: 'shadow-[0_0_15px_rgba(34,197,94,0.4)]', text: 'text-emerald-400', bg: 'bg-emerald-600', shadow: 'rgba(34, 197, 94, 0.4)', bgTo: 'from-emerald-950/80 to-teal-950/80', hoverBg: 'hover:bg-emerald-500' },
+        cyan: { border: 'border-cyan-500/50', glow: 'shadow-[0_0_15px_rgba(6,182,212,0.4)]', text: 'text-cyan-400', bg: 'bg-cyan-600', shadow: 'rgba(6,182,212,0.4)', bgTo: 'from-cyan-950/80 to-blue-950/80', hoverBg: 'hover:bg-cyan-500' },
+        gold: { border: 'border-amber-500/50', glow: 'shadow-[0_0_15px_rgba(245,158,11,0.4)]', text: 'text-amber-400', bg: 'bg-amber-600', shadow: 'rgba(245,158,11,0.4)', bgTo: 'from-amber-950/80 to-yellow-950/80', hoverBg: 'hover:bg-amber-500' }
+      };
+
+      const currentNeon = neonClasses[activeNeon] || neonClasses.purple;
+
+      // --- BOOTSTRAP DE INICIALIZAÇÃO DO FIREBASE ---
+      const tryInitFirebase = (configToUse = null) => {
+        try {
+          if (!window.FirebaseSDK) return false;
+
+          let cfg = configToUse;
+          if (!cfg) {
+            const savedConfig = localStorage.getItem('ntc_custom_firebase_config');
+            if (savedConfig) {
+              cfg = JSON.parse(savedConfig);
+            } else {
+              cfg = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+            }
+          }
+
+          if (!cfg || cfg.apiKey === "mock-api-key") {
+            setIsOfflineMode(true);
+            setFirebaseReady(true);
+            return false;
+          }
+
+          const sdk = window.FirebaseSDK;
+          const appInstance = sdk.initializeApp(cfg);
+          const dbInstance = sdk.getFirestore(appInstance);
+          const authInstance = sdk.getAuth(appInstance);
+          const appIdInstance = typeof __app_id !== 'undefined' ? __app_id : 'ntc-wallet-farm-cyber';
+
+          setFirebaseInstance({
+            db: dbInstance,
+            auth: authInstance,
+            appId: appIdInstance,
+            sdk: sdk
+          });
+
+          setIsOfflineMode(false);
+          setFirebaseReady(true);
+          return true;
+        } catch (e) {
+          console.error("Falha ao instanciar Firebase real:", e);
+          setIsOfflineMode(true);
+          setFirebaseReady(true);
+          return false;
+        }
+      };
+
+      // Carrega os SDKs e inicializa o Firebase
+      useEffect(() => {
+        const onSdkLoaded = () => {
+          tryInitFirebase();
+        };
+
+        if (window.FirebaseSDK) {
+          tryInitFirebase();
+        } else {
+          window.addEventListener('firebase-sdk-loaded', onSdkLoaded);
+        }
+        return () => window.removeEventListener('firebase-sdk-loaded', onSdkLoaded);
+      }, []);
+
+      // REGRA 3 - Autenticação imediata em background se as chaves forem reais
+      useEffect(() => {
+        if (isOfflineMode || !firebaseInstance) return;
+
+        const { auth, sdk } = firebaseInstance;
+
+        const initAuth = async () => {
+          try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              await sdk.signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+              await sdk.signInAnonymously(auth);
+            }
+          } catch (e) {
+            console.error("Erro na autenticação primária do Firebase:", e);
+          }
+        };
+
+        initAuth();
+
+        const unsubscribe = sdk.onAuthStateChanged(auth, (user) => {
+          setFbUser(user);
+        });
+
+        return () => unsubscribe();
+      }, [firebaseInstance, isOfflineMode]);
+
+      // --- ESCUTA CONEXÕES EXTERNAS (GAMES / WEB-APPS) ---
+      useEffect(() => {
+        const handleExternalMessage = (event) => {
+          const { data } = event;
+          if (!data || data.source !== 'NTC_PARTNER_SITE') return;
+
+          if (data.type === 'REQUEST_CONNECTION') {
+            setPendingRequests(prev => [...prev, {
+              id: data.requestId,
+              origin: event.origin,
+              type: 'connect',
+              title: 'Solitação de Conexão à Carteira',
+              desc: `O site ${event.origin} deseja ler seu endereço de carteira NTC para conectar a conta.`,
+              sourceWindow: event.source
+            }]);
+          } else if (data.type === 'REQUEST_TRANSACTION') {
+            const amount = parseFloat(data.amount);
+            const isDebit = data.txType === 'SPEND'; // SPEND = Debitar, EARN = Creditar
+            
+            setPendingRequests(prev => [...prev, {
+              id: data.requestId,
+              origin: event.origin,
+              type: 'transaction',
+              txType: data.txType || 'EARN',
+              title: isDebit ? 'Autorizar Débito / Compra' : 'Autorizar Crédito / Recompensa',
+              desc: isDebit 
+                ? `O site ${event.origin} quer cobrar ${amount} NTC de você pelo serviço/item "${data.label || 'Item de Jogo'}".`
+                : `O site ${event.origin} quer te dar uma recompensa de ${amount} NTC em jogo por "${data.label || 'Conquista'}".`,
+              amount: amount,
+              label: data.label || 'Transação Externa',
+              sourceWindow: event.source
+            }]);
+          }
+        };
+
+        window.addEventListener('message', handleExternalMessage);
+        return () => window.removeEventListener('message', handleExternalMessage);
+      }, [user, balance, walletAddress]);
+
+      // --- VALIDAR ENDEREÇO DE ENVIO EM TEMPO REAL ---
+      useEffect(() => {
+        if (!sendTargetAddress) {
+          setTargetUserFound(null);
+          return;
+        }
+
+        const cleanAddress = sendTargetAddress.trim();
+        if (cleanAddress.length < 10) return;
+
+        setIsValidatingAddress(true);
+        const delayDebounce = setTimeout(async () => {
+          if (isOfflineMode) {
+            // Valida localmente
+            let found = null;
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key.startsWith('ntc_offline_user_')) {
+                const uData = JSON.parse(localStorage.getItem(key));
+                if (uData.address === cleanAddress) {
+                  found = uData;
+                  break;
+                }
+              }
+            }
+            if (found) {
+              setTargetUserFound({ username: found.username, uid: 'offline' });
+            } else {
+              setTargetUserFound(null);
+            }
+            setIsValidatingAddress(false);
+          } else if (firebaseInstance && fbUser) {
+            try {
+              const { db, sdk, appId } = firebaseInstance;
+              // REGRA 1 e REGRA 2 - Leitura direta do documento de registro público de endereços
+              const regRef = sdk.doc(db, 'artifacts', appId, 'public', 'data', 'addressRegistry', cleanAddress);
+              const snap = await sdk.getDoc(regRef);
+
+              if (snap.exists()) {
+                setTargetUserFound({ username: snap.data().username, uid: snap.data().uid });
+              } else {
+                setTargetUserFound(null);
+              }
+            } catch (err) {
+              console.error("Erro ao validar endereço público:", err);
+            } finally {
+              setIsValidatingAddress(false);
+            }
+          }
+        }, 600);
+
+        return () => clearTimeout(delayDebounce);
+      }, [sendTargetAddress, firebaseInstance, fbUser, isOfflineMode]);
+
+      // --- PROTOCOLO DE REIVINDICAÇÃO DE TRANSFERÊNCIAS EM TEMPO REAL (INFLOW CLAIMS) ---
+      useEffect(() => {
+        if (!firebaseReady || !user) return;
+
+        if (isOfflineMode) {
+          // No modo simulado, checa transferências pendentes para si mesmo a cada 4 segundos
+          const claimInterval = setInterval(() => {
+            const list = JSON.parse(localStorage.getItem('ntc_offline_pending_transfers')) || [];
+            const mine = list.filter(t => t.toAddress === walletAddress && !t.claimed);
+
+            if (mine.length > 0) {
+              let addedAmount = 0;
+              const newTxs = [];
+              mine.forEach(t => {
+                t.claimed = true;
+                addedAmount += t.amount;
+                newTxs.push({
+                  id: t.id,
+                  type: `Recebido de @${t.fromUser}`,
+                  amount: t.amount,
+                  date: new Date().toLocaleString()
+                });
+              });
+
+              // Salva lista atualizada de transferências
+              localStorage.setItem('ntc_offline_pending_transfers', JSON.stringify(list));
+
+              const nextBalance = Number((balance + addedAmount).toFixed(4));
+              const nextHistory = [...newTxs, ...history];
+
+              setBalance(nextBalance);
+              setHistory(nextHistory);
+              pushStateToCloud(nextBalance, nextHistory);
+              showToastMessage(`Você recebeu +${addedAmount.toFixed(2)} NTC!`);
+            }
+          }, 3000);
+
+          return () => clearInterval(claimInterval);
+        } else if (firebaseInstance && fbUser) {
+          const { db, sdk, appId } = firebaseInstance;
+          // REGRA 1 e 2 - Escuta a coleção pública de transferências pendentes
+          const transfersCol = sdk.collection(db, 'artifacts', appId, 'public', 'data', 'transfers');
+          const q = sdk.query(transfersCol);
+
+          const unsubscribe = sdk.onSnapshot(q, async (snapshot) => {
+            let addedAmount = 0;
+            const claims = [];
+            const newHistoryEntries = [];
+
+            snapshot.forEach((changeDoc) => {
+              const data = changeDoc.data();
+              // Filtra na memória para respeitar a REGRA 2 (sem queries complexas)
+              if (data.toAddress === walletAddress && !data.claimed) {
+                addedAmount += data.amount;
+                claims.push(changeDoc.ref);
+                newHistoryEntries.push({
+                  id: changeDoc.id,
+                  type: `Recebido de @${data.fromUser}`,
+                  amount: data.amount,
+                  date: new Date().toLocaleString()
+                });
+              }
+            });
+
+            if (claims.length > 0) {
+              // Marca as transferências como claimed
+              for (let ref of claims) {
+                await sdk.updateDoc(ref, { claimed: true });
+              }
+
+              const nextBalance = Number((balance + addedAmount).toFixed(4));
+              const nextHistory = [...newHistoryEntries, ...history];
+
+              setBalance(nextBalance);
+              setHistory(nextHistory);
+              await pushStateToCloud(nextBalance, nextHistory);
+              showToastMessage(`Você recebeu +${addedAmount.toFixed(2)} NTC em tempo real!`);
+            }
+          }, (err) => console.error("Erro na escuta das transferências:", err));
+
+          return () => unsubscribe();
+        }
+      }, [firebaseReady, user, isOfflineMode, firebaseInstance, fbUser, balance, history]);
+
+      // --- REALIZAR TRANSFERÊNCIA REAL (P2P) ---
+      const handleRealTransfer = async (e) => {
+        e.preventDefault();
+        const amount = parseFloat(sendAmount);
+        if (!targetUserFound) {
+          showToastMessage("Destinatário inválido ou não selecionado.", "error");
+          return;
+        }
+        if (isNaN(amount) || amount <= 0) {
+          showToastMessage("Insira um valor de envio válido.", "error");
+          return;
+        }
+        if (balance < amount) {
+          showToastMessage("Saldo NTC insuficiente para esta operação.", "error");
+          return;
+        }
+
+        // Deduz saldo local imediato do remetente
+        const nextBalance = Number((balance - amount).toFixed(4));
+        const newTx = {
+          id: 'TX-SEND-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+          type: `Enviado para @${targetUserFound.username}`,
+          amount: -amount,
+          date: new Date().toLocaleString()
+        };
+        const nextHistory = [newTx, ...history];
+
+        setBalance(nextBalance);
+        setHistory(nextHistory);
+
+        if (isOfflineMode) {
+          // Cria transferência na fila local simula
+          const transfers = JSON.parse(localStorage.getItem('ntc_offline_pending_transfers')) || [];
+          transfers.push({
+            id: newTx.id,
+            fromUser: user,
+            fromAddress: walletAddress,
+            toAddress: sendTargetAddress,
+            amount: amount,
+            claimed: false,
+            timestamp: Date.now()
+          });
+          localStorage.setItem('ntc_offline_pending_transfers', JSON.stringify(transfers));
+
+          pushStateToCloud(nextBalance, nextHistory);
+          showToastMessage(`Transferência de ${amount} NTC iniciada com sucesso!`);
+        } else {
+          try {
+            const { db, sdk, appId } = firebaseInstance;
+            
+            // Grava transferência pendente pública em nuvem
+            const transfersCol = sdk.collection(db, 'artifacts', appId, 'public', 'data', 'transfers');
+            await sdk.addDoc(transfersCol, {
+              fromUser: user,
+              fromAddress: walletAddress,
+              toAddress: sendTargetAddress,
+              amount: amount,
+              claimed: false,
+              timestamp: Date.now()
+            });
+
+            await pushStateToCloud(nextBalance, nextHistory);
+            showToastMessage(`Transferência de ${amount} NTC enviada para a rede!`);
+          } catch (err) {
+            console.error("Erro na transferência Firebase:", err);
+            showToastMessage("Erro ao iniciar transferência em nuvem.", "error");
+          }
+        }
+
+        setSendTargetAddress('');
+        setSendAmount('');
+        setTargetUserFound(null);
+      };
+
+      const saveCustomFirebaseConfig = (e) => {
+        e.preventDefault();
+        setFirebaseError('');
+        try {
+          const parsed = JSON.parse(customConfigInput);
+          if (!parsed.apiKey || !parsed.projectId) {
+            setFirebaseError('JSON inválido. Deve conter pelo menos "apiKey" e "projectId".');
+            return;
+          }
+          localStorage.setItem('ntc_custom_firebase_config', JSON.stringify(parsed));
+          const success = tryInitFirebase(parsed);
+          if (success) {
+            showToastMessage("Firebase configurado com sucesso!");
+            setShowConfigModal(false);
+            window.location.reload(); 
+          } else {
+            setFirebaseError('Erro de conexão com estas chaves do Firebase.');
+          }
+        } catch (err) {
+          setFirebaseError('JSON de Configuração Inválido. Verifique vírgulas e aspas.');
+        }
+      };
+
+      const clearCustomFirebaseConfig = () => {
+        localStorage.removeItem('ntc_custom_firebase_config');
+        localStorage.removeItem('ntc_session_uid');
+        window.location.reload();
+      };
+
+      const showToastMessage = (msg, type = "success") => {
+        setToast({ message: msg, type });
+        setTimeout(() => setToast(null), 4000);
+      };
+
+      const generateNewSeed = () => {
+        let words = [];
+        for (let i = 0; i < 12; i++) {
+          const randomIndex = Math.floor(Math.random() * MNEMONIC_WORDS.length);
+          words.push(MNEMONIC_WORDS[randomIndex]);
+        }
+        return words.join(' ');
+      };
+
+      const generateAddressFromSeed = (seed) => {
+        let hash = 0;
+        const cleanSeed = seed.trim().toLowerCase();
+        for (let i = 0; i < cleanSeed.length; i++) {
+          hash = cleanSeed.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        let hex = '';
+        for (let i = 0; i < 8; i++) {
+          const value = (hash >> (i * 4)) & 0xF;
+          hex += value.toString(16);
+        }
+        return 'NTC0x' + hex.toUpperCase() + 'FC' + cleanSeed.substring(0, 3).toUpperCase();
+      };
+
+      // --- MÉTODOS DE CADASTRO E LOGIN ---
+      const handleRegisterSeed = (e) => {
+        e.preventDefault();
+        setAuthError('');
+        if (!username.trim()) {
+          setAuthError('Escolha um nome de usuário.');
+          return;
+        }
+        const seed = generateNewSeed();
+        setGeneratedSeed(seed);
+        setAuthMode('seed_display');
+      };
+
+      const confirmAndCreateAccount = async () => {
+        const address = generateAddressFromSeed(generatedSeed);
+        const defaultProfile = {
+          username: username,
+          seed: generatedSeed,
+          address: address,
+          balance: 10.00,
+          unlockedFeatures: unlockedFeatures,
+          activeNeon: 'purple',
+          profileBio: 'Nômade digital na AceleraNet',
+          socialLinks: { insta: '', tiktok: '' },
+          notesList: [],
+          parties: [],
+          history: [{
+            id: 'TX-WELCOME',
+            type: 'Boas-vindas AceleraNet',
+            amount: 10.00,
+            date: new Date().toLocaleString()
+          }]
+        };
+
+        if (isOfflineMode) {
+          localStorage.setItem(`ntc_offline_user_${username}`, JSON.stringify(defaultProfile));
+          localStorage.setItem('ntc_session_offline_username', username);
+          
+          setUser(username);
+          setWalletAddress(address);
+          setBalance(10.00);
+          setHistory(defaultProfile.history);
+          setActiveTab('dashboard');
+          showToastMessage("Carteira Criada Localmente! (Simulação Ativa)");
+        } else {
+          try {
+            if (!fbUser) {
+              setAuthError('Sincronizando com o Firebase. Tente novamente em alguns segundos.');
+              return;
+            }
+
+            const { db, appId, sdk } = firebaseInstance;
+            const uid = fbUser.uid;
+
+            // Salva perfil no Firestore conforme a REGRA 1
+            const userDocPath = sdk.doc(db, 'artifacts', appId, 'users', uid, 'profile', 'userData');
+            await sdk.setDoc(userDocPath, { ...defaultProfile, uid });
+
+            // REGRA 1 - Grava mapeamento público da semente
+            const safeSeedKey = generatedSeed.replace(/\s+/g, '_');
+            const seedMappingPath = sdk.doc(db, 'artifacts', appId, 'public', 'data', 'seedMapping', safeSeedKey);
+            await sdk.setDoc(seedMappingPath, { uid });
+
+            // REGRA 1 - Grava o endereço na base pública de registros
+            const addressRegistryPath = sdk.doc(db, 'artifacts', appId, 'public', 'data', 'addressRegistry', address);
+            await sdk.setDoc(addressRegistryPath, { uid, username });
+
+            setUser(username);
+            setWalletAddress(address);
+            setBalance(10.00);
+            setHistory(defaultProfile.history);
+
+            localStorage.setItem('ntc_session_uid', uid);
+            setActiveTab('dashboard');
+            showToastMessage("Carteira salva em nuvem no Firebase!");
+          } catch (err) {
+            console.error("Firebase Reg Error:", err);
+            setAuthError('Erro ao registrar no Firebase. Ative o Modo Simulado local ou configure seu Firebase.');
+          }
+        }
+      };
+
+      const handleLoginSeed = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        const cleanSeed = seedPhraseInput.trim().toLowerCase();
+        if (!cleanSeed) {
+          setAuthError('Insira sua frase semente.');
+          return;
+        }
+
+        if (isOfflineMode) {
+          let foundUser = null;
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('ntc_offline_user_')) {
+              const uData = JSON.parse(localStorage.getItem(key));
+              if (uData.seed.trim().toLowerCase() === cleanSeed) {
+                foundUser = uData;
+                break;
+              }
+            }
+          }
+
+          if (foundUser) {
+            setUser(foundUser.username);
+            setWalletAddress(foundUser.address);
+            setBalance(foundUser.balance || 0);
+            setHistory(foundUser.history || []);
+            setUnlockedFeatures(foundUser.unlockedFeatures || unlockedFeatures);
+            setActiveNeon(foundUser.activeNeon || 'purple');
+            setProfileBio(foundUser.profileBio || '');
+            setSocialLinks(foundUser.socialLinks || { insta: '', tiktok: '' });
+            setNotesList(foundUser.notesList || []);
+            setParties(foundUser.parties || []);
+            
+            localStorage.setItem('ntc_session_offline_username', foundUser.username);
+            setActiveTab('dashboard');
+            showToastMessage(`Sessão Simulada Restaurada: @${foundUser.username}`);
+          } else {
+            setAuthError('Frase semente incorreta ou nenhuma conta criada localmente.');
+          }
+        } else {
+          try {
+            if (!fbUser) {
+              setAuthError('Conexão Firebase pendente. Tente novamente em breve.');
+              return;
+            }
+
+            const { db, appId, sdk } = firebaseInstance;
+
+            const safeSeedKey = cleanSeed.replace(/\s+/g, '_');
+            const seedMappingRef = sdk.doc(db, 'artifacts', appId, 'public', 'data', 'seedMapping', safeSeedKey);
+            const mappingSnap = await sdk.getDoc(seedMappingRef);
+
+            if (!mappingSnap.exists()) {
+              setAuthError('Nenhum registro encontrado para esta Semente no Firebase.');
+              return;
+            }
+
+            const resolvedUid = mappingSnap.data().uid;
+            const userProfileRef = sdk.doc(db, 'artifacts', appId, 'users', resolvedUid, 'profile', 'userData');
+            const profileSnap = await sdk.getDoc(userProfileRef);
+
+            if (profileSnap.exists()) {
+              const data = profileSnap.data();
+              setUser(data.username);
+              setWalletAddress(data.address);
+              setBalance(data.balance || 0);
+              setHistory(data.history || []);
+              setUnlockedFeatures(data.unlockedFeatures || unlockedFeatures);
+              setActiveNeon(data.activeNeon || 'purple');
+              setProfileBio(data.profileBio || '');
+              setSocialLinks(data.socialLinks || { insta: '', tiktok: '' });
+              setNotesList(data.notesList || []);
+              setParties(data.parties || []);
+
+              localStorage.setItem('ntc_session_uid', resolvedUid);
+              setActiveTab('dashboard');
+              showToastMessage(`Sessão segura restaurada para @${data.username}`);
+            } else {
+              setAuthError('Perfil não encontrado para o UID associado.');
+            }
+          } catch (err) {
+            console.error("Firebase Login Error:", err);
+            setAuthError('Falha ao autenticar no Firebase. Tente o modo offline se necessário.');
+          }
+        }
+      };
+
+      // Auto-load de sessões
+      useEffect(() => {
+        if (!firebaseReady) return;
+        
+        if (isOfflineMode) {
+          const savedOfflineUser = localStorage.getItem('ntc_session_offline_username');
+          if (savedOfflineUser) {
+            const data = JSON.parse(localStorage.getItem(`ntc_offline_user_${savedOfflineUser}`));
+            if (data) {
+              setUser(data.username);
+              setWalletAddress(data.address);
+              setBalance(data.balance || 0);
+              setHistory(data.history || []);
+              setUnlockedFeatures(data.unlockedFeatures || unlockedFeatures);
+              setActiveNeon(data.activeNeon || 'purple');
+              setProfileBio(data.profileBio || '');
+              setSocialLinks(data.socialLinks || { insta: '', tiktok: '' });
+              setNotesList(data.notesList || []);
+              setParties(data.parties || []);
+              setActiveTab('dashboard');
+            }
+          }
+        } else if (firebaseInstance && fbUser) {
+          const savedUid = localStorage.getItem('ntc_session_uid');
+          if (savedUid) {
+            const { db, appId, sdk } = firebaseInstance;
+            const userProfileRef = sdk.doc(db, 'artifacts', appId, 'users', savedUid, 'profile', 'userData');
+            sdk.getDoc(userProfileRef).then((profileSnap) => {
+              if (profileSnap.exists()) {
+                const data = profileSnap.data();
+                setUser(data.username);
+                setWalletAddress(data.address);
+                setBalance(data.balance || 0);
+                setHistory(data.history || []);
+                setUnlockedFeatures(data.unlockedFeatures || unlockedFeatures);
+                setActiveNeon(data.activeNeon || 'purple');
+                setProfileBio(data.profileBio || '');
+                setSocialLinks(data.socialLinks || { insta: '', tiktok: '' });
+                setNotesList(data.notesList || []);
+                setParties(data.parties || []);
+                setActiveTab('dashboard');
+              }
+            }).catch(err => console.error("Erro no auto-load de sessão:", err));
+          }
+        }
+      }, [firebaseReady, isOfflineMode, firebaseInstance, fbUser]);
+
+      // --- SINCRONIZAÇÃO EM NUVEM OU LOCAL ---
+      const pushStateToCloud = async (overrideBalance = null, overrideHistory = null, updatedUnlocked = null) => {
+        const nextBal = overrideBalance !== null ? overrideBalance : balance;
+        const nextHist = overrideHistory !== null ? overrideHistory : history;
+        const nextUnlock = updatedUnlocked !== null ? updatedUnlocked : unlockedFeatures;
+
+        if (isOfflineMode) {
+          if (!user) return;
+          const localData = JSON.parse(localStorage.getItem(`ntc_offline_user_${user}`)) || {};
+          const merged = {
+            ...localData,
+            balance: nextBal,
+            history: nextHist,
+            unlockedFeatures: nextUnlock,
+            activeNeon,
+            profileBio,
+            socialLinks,
+            notesList,
+            parties
+          };
+          localStorage.setItem(`ntc_offline_user_${user}`, JSON.stringify(merged));
+          setSyncedCloud(true);
+        } else if (firebaseInstance && fbUser) {
+          setSyncedCloud(false);
+          try {
+            const { db, sdk, appId } = firebaseInstance;
+            const userProfileRef = sdk.doc(db, 'artifacts', appId, 'users', fbUser.uid, 'profile', 'userData');
+            
+            await sdk.setDoc(userProfileRef, {
+              uid: fbUser.uid,
+              username: user,
+              address: walletAddress,
+              balance: nextBal,
+              history: nextHist,
+              unlockedFeatures: nextUnlock,
+              activeNeon,
+              profileBio,
+              socialLinks,
+              notesList,
+              parties
+            }, { merge: true });
+
+            setSyncedCloud(true);
+          } catch (err) {
+            console.error("Erro ao subir dados para Firebase:", err);
+          }
+        }
+      };
+
+      // Dispara salvamentos automáticos
+      useEffect(() => {
+        if (user) {
+          pushStateToCloud();
+        }
+      }, [activeNeon, profileBio, socialLinks, notesList, parties]);
+
+      // --- ESCUTA MURAL DE RESENHAS EM TEMPO REAL ---
+      useEffect(() => {
+        if (!firebaseReady) return;
+
+        if (isOfflineMode) {
+          const localReviews = JSON.parse(localStorage.getItem('ntc_simulated_reviews')) || [];
+          setHomeReviews(localReviews);
+        } else if (firebaseInstance && fbUser) {
+          const { db, sdk, appId } = firebaseInstance;
+          const reviewsCollection = sdk.collection(db, 'artifacts', appId, 'public', 'data', 'homeReviews');
+          const q = sdk.query(reviewsCollection);
+
+          const unsubscribe = sdk.onSnapshot(q, (snapshot) => {
+            const list = [];
+            snapshot.forEach((doc) => {
+              list.push({ id: doc.id, ...doc.data() });
+            });
+            setHomeReviews(list);
+          }, (err) => {
+            console.error("Erro em tempo real nas avaliações do mural:", err);
+          });
+
+          return () => unsubscribe();
+        }
+      }, [firebaseReady, isOfflineMode, firebaseInstance, fbUser]);
+
+      // --- SESSÃO DE GIRO ---
+      const spinWheel = () => {
+        if (isSpinning || spinCooldown > 0) return;
+        setIsSpinning(true);
+        setSpinResult(null);
+
+        const rewards = [
+          { value: 0.2, label: '0.2 NTC' },
+          { value: 0.8, label: '0.8 NTC' },
+          { value: 1.5, label: '1.5 NTC' },
+          { value: 3.0, label: '3.0 NTC' },
+          { value: 0.0, label: 'Sem ganho' },
+          { value: 10.0, label: 'MEGA JACKPOT (10.0 NTC)' }
+        ];
+
+        const chosenIndex = Math.floor(Math.random() * rewards.length);
+        const prize = rewards[chosenIndex];
+        spinRotation.current = spinRotation.current + 1440 + (chosenIndex * 60);
+
+        setTimeout(() => {
+          setIsSpinning(false);
+          setSpinResult(prize);
+
+          if (prize.value > 0) {
+            const nextBalance = Number((balance + prize.value).toFixed(4));
+            const newTx = {
+              id: 'TX-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
+              type: 'Sorte na Roleta',
+              amount: prize.value,
+              date: new Date().toLocaleString()
+            };
+            const nextHistory = [newTx, ...history];
+
+            setBalance(nextBalance);
+            setHistory(nextHistory);
+            pushStateToCloud(nextBalance, nextHistory);
+            showToastMessage(`Sorte! Você farmou +${prize.value} NTC.`);
+          } else {
+            showToastMessage("Não desista! Tente no próximo giro.", "error");
+          }
+
+          setSpinCooldown(30); 
+        }, 3000);
+      };
+
+      // Timers de cooldown e mineração de motores
+      useEffect(() => {
+        const interval = setInterval(() => {
+          setSpinCooldown(prev => (prev > 0 ? prev - 1 : 0));
+
+          setEngines(prev => {
+            let changed = false;
+            const copy = { ...prev };
+            Object.keys(copy).forEach(key => {
+              if (copy[key].active && copy[key].timeLeft > 0) {
+                copy[key].timeLeft -= 1;
+                const elapsed = copy[key].duration - copy[key].timeLeft;
+                copy[key].accumulated = Number(((elapsed / copy[key].duration) * copy[key].reward).toFixed(4));
+                changed = true;
+
+                if (copy[key].timeLeft === 0) {
+                  copy[key].active = false;
+                  copy[key].accumulated = 0;
+                  triggerEnginePayout(copy[key].reward, copy[key].label);
+                }
+              }
+            });
+            return changed ? copy : prev;
+          });
+        }, 1000);
+        return () => clearInterval(interval);
+      }, [engines, balance, history]);
+
+      const triggerEnginePayout = (reward, label) => {
+        const nextBalance = Number((balance + reward).toFixed(4));
+        const newTx = {
+          id: 'TX-ENG-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+          type: `Rendimento: ${label}`,
+          amount: reward,
+          date: new Date().toLocaleString()
+        };
+        const nextHistory = [newTx, ...history];
+        setBalance(nextBalance);
+        setHistory(nextHistory);
+        pushStateToCloud(nextBalance, nextHistory);
+        showToastMessage(`Farm completo do ${label}! +${reward} NTC creditados.`);
+      };
+
+      const startEngine = (key) => {
+        if (engines[key].active) return;
+        setEngines(prev => ({
+          ...prev,
+          [key]: {
+            ...prev[key],
+            active: true,
+            timeLeft: prev[key].duration,
+            accumulated: 0
+          }
+        }));
+        showToastMessage(`Motor "${engines[key].label}" ativado com sucesso!`);
+      };
+
+      // --- COMPRA DE UPGRADES ---
+      const unlockWidget = (key) => {
+        const item = SHOP_ITEMS[key];
+        if (!item) return;
+
+        if (balance < item.price) {
+          showToastMessage(`Balanço NTC insuficiente!`, "error");
+          return;
+        }
+
+        const nextBalance = Number((balance - item.price).toFixed(4));
+        const newTx = {
+          id: 'TX-UPGRADE-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+          type: `Upgrade Adquirido: ${item.label}`,
+          amount: -item.price,
+          date: new Date().toLocaleString()
+        };
+        const nextHistory = [newTx, ...history];
+        const nextUnlocked = { ...unlockedFeatures, [key]: true };
+
+        setBalance(nextBalance);
+        setHistory(nextHistory);
+        setUnlockedFeatures(nextUnlocked);
+        pushStateToCloud(nextBalance, nextHistory, nextUnlocked);
+        showToastMessage(`Upgrade "${item.label}" destravado!`);
+      };
+
+      // Sticky Notes
+      const addStickyNote = () => {
+        if (!newNoteText.trim()) return;
+        const newNote = { id: Date.now(), text: newNoteText, color: activeNeon };
+        setNotesList([...notesList, newNote]);
+        setNewNoteText('');
+      };
+
+      const removeStickyNote = (id) => {
+        setNotesList(notesList.filter(n => n.id !== id));
+      };
+
+      // Post de Relato Consensual
+      const publishHomeReview = async (e) => {
+        e.preventDefault();
+        if (!newReview.title || !newReview.host || !newReview.reviewText) {
+          showToastMessage("Preencha todos os campos do relato.", "error");
+          return;
+        }
+        if (!newReview.consented) {
+          showToastMessage("É necessário concordar com as diretrizes de consentimento.", "error");
+          return;
+        }
+
+        const reportObject = {
+          title: newReview.title,
+          host: newReview.host,
+          vibe: parseInt(newReview.vibe),
+          reviewText: newReview.reviewText,
+          timestamp: new Date().toLocaleString(),
+          author: user
+        };
+
+        if (isOfflineMode) {
+          const list = JSON.parse(localStorage.getItem('ntc_simulated_reviews')) || [];
+          const updated = [reportObject, ...list];
+          localStorage.setItem('ntc_simulated_reviews', JSON.stringify(updated));
+          setHomeReviews(updated);
+        } else {
+          try {
+            if (!fbUser) {
+              showToastMessage("Aguardando login no Firebase...", "error");
+              return;
+            }
+
+            const { db, sdk, appId } = firebaseInstance;
+            const reviewsCol = sdk.collection(db, 'artifacts', appId, 'public', 'data', 'homeReviews');
+            await sdk.addDoc(reviewsCol, reportObject);
+          } catch (err) {
+            console.error(err);
+            showToastMessage("Falha ao salvar no Firebase.", "error");
+            return;
+          }
+        }
+
+        const nextBalance = Number((balance + 1.0).toFixed(4));
+        const newTx = {
+          id: 'TX-REVIEW-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+          type: 'Incentivo Relato Consensual',
+          amount: 1.0,
+          date: new Date().toLocaleString()
+        };
+        const nextHistory = [newTx, ...history];
+
+        setBalance(nextBalance);
+        setHistory(nextHistory);
+        pushStateToCloud(nextBalance, nextHistory);
+
+        setNewReview({ title: '', host: '', vibe: 5, reviewText: '', consented: false });
+        showToastMessage("Relato de Resenha publicado com sucesso! +1.0 NTC ganho.");
+      };
+
+      // --- PROCESSAR SOLICITAÇÕES EXTERNAS DE JOGOS (REALÍSTICO) ---
+      const handleApproveRequest = async (req) => {
+        if (req.type === 'connect') {
+          req.sourceWindow.postMessage({
+            type: 'NTC_CONNECTION_RESPONSE',
+            requestId: req.id,
+            status: 'approved',
+            address: walletAddress,
+            username: user
+          }, req.origin);
+          showToastMessage(`Site conectado com sucesso!`);
+        } else if (req.type === 'transaction') {
+          const isDebit = req.txType === 'SPEND';
+          
+          if (isDebit && balance < req.amount) {
+            showToastMessage("Saldo insuficiente para pagar o jogo!", "error");
+            req.sourceWindow.postMessage({
+              type: 'NTC_TRANSACTION_RESPONSE',
+              requestId: req.id,
+              status: 'declined',
+              error: 'Saldo insuficiente.'
+            }, req.origin);
+            setPendingRequests(prev => prev.filter(p => p.id !== req.id));
+            return;
+          }
+
+          // Realiza o ajuste real no saldo de forma Cloud ou Offline
+          const change = isDebit ? -req.amount : req.amount;
+          const nextBalance = Number((balance + change).toFixed(4));
+          const newTx = {
+            id: 'TX-EXT-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+            type: `${isDebit ? 'Débito' : 'Crédito'} via ${req.label}`,
+            amount: change,
+            date: new Date().toLocaleString()
+          };
+          const nextHistory = [newTx, ...history];
+
+          setBalance(nextBalance);
+          setHistory(nextHistory);
+          await pushStateToCloud(nextBalance, nextHistory);
+
+          req.sourceWindow.postMessage({
+            type: 'NTC_TRANSACTION_RESPONSE',
+            requestId: req.id,
+            status: 'approved',
+            txId: newTx.id,
+            newBalance: nextBalance
+          }, req.origin);
+
+          showToastMessage(isDebit ? `Débito de ${req.amount} NTC concluído!` : `Recompensa de ${req.amount} NTC creditada!`);
+        }
+
+        setPendingRequests(prev => prev.filter(p => p.id !== req.id));
+      };
+
+      const handleDeclineRequest = (req) => {
+        req.sourceWindow.postMessage({
+          type: req.type === 'connect' ? 'NTC_CONNECTION_RESPONSE' : 'NTC_TRANSACTION_RESPONSE',
+          requestId: req.id,
+          status: 'declined',
+          error: 'Usuário recusou a solicitação.'
+        }, req.origin);
+
+        setPendingRequests(prev => prev.filter(p => p.id !== req.id));
+        showToastMessage("Solicitação externa cancelada.", "error");
+      };
+
+      const handleLogout = () => {
+        localStorage.removeItem('ntc_session_uid');
+        localStorage.removeItem('ntc_session_offline_username');
+        setUser(null);
+        setWalletAddress('');
+        setBalance(0);
+        setHistory([]);
+        setFbUser(null);
+        setActiveTab('auth');
+        showToastMessage("Sessão finalizada!");
+      };
+
+      return (
+        <div className="flex-grow flex flex-col justify-between">
+          
+          {/* Header */}
+          <header class={`border-b border-purple-950/40 bg-black/80 backdrop-blur-md px-6 py-4 sticky top-0 z-40 transition-all ${currentNeon.glow}`}>
+            <div className="max-w-6xl mx-auto flex justify-between items-center font-orbitron">
+              <div className="flex items-center space-x-3">
+                <div class={`h-10 w-10 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center ${currentNeon.glow}`}>
+                  <span className="font-extrabold text-xl text-white">N</span>
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-white">
+                    NTC ECOSYSTEM
+                  </h1>
+                  <p className="text-[10px] text-purple-300/70 tracking-widest uppercase">Safe Net Portal</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <button 
+                  onClick={() => setShowConfigModal(true)}
+                  className="px-2.5 py-1.5 bg-purple-950/80 hover:bg-purple-900 border border-purple-800/40 rounded-lg text-purple-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold"
+                  title="Configurar Conexões do Firebase"
+                >
+                  <i data-lucide="settings" className="w-3.5 h-3.5"></i>
+                  <span>Setup Firebase</span>
+                </button>
+
+                {user && (
+                  <div className="flex items-center space-x-4 text-xs font-semibold">
+                    <div className="h-6 w-[1px] bg-purple-950"></div>
+                    <div className="text-right">
+                      <span className="text-gray-500 block uppercase">Carteira Ativa</span>
+                      <span class={`${currentNeon.text}`}>@{user}</span>
+                    </div>
+                    {isOfflineMode ? (
+                      <span className="text-yellow-500 flex items-center space-x-1" title="Modo Local Simulado (Sem Firebase)">
+                        <span className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
+                        <span className="hidden md:inline">Modo Local</span>
+                      </span>
+                    ) : fbUser ? (
+                      <span className="text-green-400 flex items-center space-x-1" title="Sincronizado no Firebase">
+                        <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-ping"></span>
+                        <span className="hidden md:inline">Firebase Ativo</span>
+                      </span>
+                    ) : (
+                      <span className="text-yellow-500 flex items-center space-x-1" title="Sincronizando...">
+                        <i data-lucide="refresh-cw" className="w-3.5 h-3.5 animate-spin"></i>
+                      </span>
+                    )}
+                    <button onClick={handleLogout} className="p-1.5 bg-red-950/30 text-red-400 hover:text-red-200 border border-red-900/30 rounded-lg transition">
+                      Sair
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </header>
+
+          {/* Modal de Solicitação Externa de Jogos */}
+          {pendingRequests.length > 0 && (
+            <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-[#0f0f1c] border-2 border-pink-500 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+                <div className="bg-gradient-to-r from-purple-900 to-pink-900 px-6 py-4 flex items-center space-x-3">
+                  <div className="bg-pink-500/20 p-2 rounded-lg text-pink-400 animate-pulse">
+                    <i data-lucide="shield-alert" className="w-6 h-6"></i>
+                  </div>
+                  <h3 className="font-orbitron font-bold text-lg text-white">Conexão Segura</h3>
+                </div>
+                <div className="p-6 space-y-4">
+                  <p className="text-gray-300 text-sm leading-relaxed">
+                    {pendingRequests[0].desc}
+                  </p>
+                  <div className="bg-black/40 p-3 rounded-lg border border-purple-950">
+                    <span className="text-xs text-gray-500 block uppercase font-mono">Endereço de Origem</span>
+                    <span className="text-xs text-purple-300 font-mono break-all">{pendingRequests[0].origin}</span>
+                    
+                    {pendingRequests[0].amount && (
+                      <div className="mt-3 pt-2 border-t border-purple-950 flex justify-between items-center">
+                        <span className="text-xs text-gray-400">Total Solicitado:</span>
+                        <span class={`text-sm font-orbitron font-bold ${pendingRequests[0].txType === 'SPEND' ? 'text-red-400' : 'text-green-400'}`}>
+                          {pendingRequests[0].txType === 'SPEND' ? '-' : '+'}{pendingRequests[0].amount.toFixed(2)} NTC
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <button
+                      onClick={() => handleDeclineRequest(pendingRequests[0])}
+                      className="px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-xs font-orbitron font-bold transition"
+                    >
+                      REJEITAR
+                    </button>
+                    <button
+                      onClick={() => handleApproveRequest(pendingRequests[0])}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white text-xs font-orbitron font-bold transition shadow-lg"
+                    >
+                      CONFIRMAR
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de Configuração do Firebase */}
+          {showConfigModal && (
+            <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-[#0f0f1c] border border-purple-500/30 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative">
+                <button onClick={() => setShowConfigModal(false)} className="absolute right-4 top-4 text-gray-500 hover:text-white font-bold text-xl">&times;</button>
+                <h3 className="text-xl font-orbitron font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-2">Conectar meu Firebase</h3>
+                <p className="text-xs text-gray-400 mb-4">
+                  Por padrão, o app roda no <strong>Modo Local Simulado</strong>. Para salvar dados em nuvem no seu próprio projeto do Firebase (necessário para o GitHub Pages), crie um projeto no console do Firebase, adicione um aplicativo web e cole a configuração JSON abaixo:
+                </p>
+
+                {firebaseError && (
+                  <div className="p-3 bg-red-950/40 border border-red-500/40 rounded-xl text-red-400 text-xs mb-4">
+                    {firebaseError}
+                  </div>
+                )}
+
+                <form onSubmit={saveCustomFirebaseConfig} className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-1">Cole a Configuração JSON do Firebase</label>
+                    <textarea
+                      rows="7"
+                      value={customConfigInput}
+                      onChange={(e) => setCustomConfigInput(e.target.value)}
+                      placeholder={`{
+  "apiKey": "SUA_API_KEY",
+  "authDomain": "SEU_PROJETO.firebaseapp.com",
+  "projectId": "SEU_PROJETO",
+  "storageBucket": "SEU_PROJETO.appspot.com",
+  "messagingSenderId": "00000000",
+  "appId": "1:0000000:web:00000"
+}`}
+                      className="w-full bg-black/60 border border-purple-900/50 rounded-xl p-3 text-xs font-mono text-pink-300 focus:outline-none"
+                    ></textarea>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-orbitron font-bold text-xs rounded-xl transition">
+                      SALVAR E APLICAR
+                    </button>
+                    <button type="button" onClick={clearCustomFirebaseConfig} className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-gray-400 font-orbitron font-bold text-xs rounded-xl transition">
+                      LIMPAR CHAVES (MODO LOCAL)
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Toast de notificações */}
+          {toast && (
+            <div className="fixed bottom-6 right-6 z-50 animate-bounce">
+              <div class={`p-4 rounded-xl border flex items-center space-x-3 text-sm shadow-2xl ${toast.type === 'error' ? 'bg-red-950/90 border-red-500/50 text-red-300' : 'bg-emerald-950/90 border-emerald-500/50 text-emerald-300'}`}>
+                <span>{toast.message}</span>
+              </div>
+            </div>
+          )}
+
+          <main className="flex-grow max-w-6xl w-full mx-auto p-4 md:p-6 flex flex-col justify-start">
+            
+            {/* TELA 1: AUTHENTICATION SECURE VIA SEED */}
+            {activeTab === 'auth' && (
+              <div className="flex-grow flex items-center justify-center py-10">
+                <div className="w-full max-w-md bg-[#0c0c16] border border-purple-900/60 rounded-2xl p-8 shadow-xl">
+                  
+                  <div className="text-center mb-8">
+                    {isOfflineMode ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 uppercase tracking-widest font-orbitron">
+                        Simulador Offline Ativo
+                      </span>
+                    ) : fbUser ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20 uppercase tracking-widest font-orbitron">
+                        Firebase Conectado
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 uppercase tracking-widest font-orbitron animate-pulse">
+                        Aguardando Conexão...
+                      </span>
+                    )}
+                    <h2 className="text-3xl font-black font-orbitron mt-3 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+                      SECURE WALLET
+                    </h2>
+                    <p className="text-xs text-gray-400 mt-2 italic">
+                      {isOfflineMode 
+                        ? "Usando armazenamento persistente local do seu navegador para simular a nuvem."
+                        : "Sincronizando de forma descentralizada no seu próprio banco de dados Firebase."
+                      }
+                    </p>
+                  </div>
+
+                  {authError && (
+                    <div className="p-3 bg-red-950/40 border border-red-500/40 rounded-xl text-red-400 text-sm mb-4">
+                      {authError}
+                    </div>
+                  )}
+
+                  {authMode === 'login' && (
+                    <form onSubmit={handleLoginSeed} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-widest text-purple-300 mb-1">Insira sua Frase Semente (12 palavras)</label>
+                        <textarea
+                          rows="3"
+                          value={seedPhraseInput}
+                          onChange={(e) => setSeedPhraseInput(e.target.value)}
+                          placeholder="EX: matrix net cyber token neon flow delta fusion protocol node quantum sync"
+                          className="w-full bg-black/40 border border-purple-900/50 rounded-xl py-3 px-4 text-white text-xs font-mono focus:outline-none focus:ring-1 focus:ring-pink-500"
+                        ></textarea>
+                      </div>
+                      <button type="submit" className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-orbitron font-bold rounded-xl transition">
+                        RESTAURAR CARTEIRA SECURE
+                      </button>
+                    </form>
+                  )}
+
+                  {authMode === 'register' && (
+                    <form onSubmit={handleRegisterSeed} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-widest text-purple-300 mb-1">Nome do Dono da Carteira</label>
+                        <input
+                          type="text"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          placeholder="EX: acelera_cyber"
+                          className="w-full bg-black/40 border border-purple-900/50 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-1 focus:ring-pink-500"
+                        />
+                      </div>
+                      <button type="submit" className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-orbitron font-bold rounded-xl transition">
+                        SOLICITAR SEMENTE DE SEGURANÇA
+                      </button>
+                    </form>
+                  )}
+
+                  {authMode === 'seed_display' && (
+                    <div className="space-y-6">
+                      <div className="p-4 bg-yellow-950/30 border border-yellow-500/30 rounded-xl text-yellow-300 text-xs">
+                        <strong>AVISO DE SEGURANÇA:</strong> Guarde esta frase semente em local seguro. Sem ela, você não poderá recuperar suas moedas ou perfil.
+                      </div>
+                      <div className="bg-black/80 p-4 rounded-xl border border-purple-900/60 text-center">
+                        <p className="font-mono text-sm tracking-wide text-pink-400 select-all">{generatedSeed}</p>
+                      </div>
+                      <button onClick={confirmAndCreateAccount} className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-orbitron font-bold rounded-xl transition">
+                        EU GUARDEI MINHA SEMENTE! CRIAR CONTA
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="text-center mt-6 pt-6 border-t border-purple-950/60 flex flex-col space-y-2">
+                    {authMode === 'login' ? (
+                      <button onClick={() => setAuthMode('register')} className="text-xs text-pink-400 hover:text-pink-300 font-semibold">
+                        Não tem uma chave semente? (GERAR NOVA CONTA)
+                      </button>
+                    ) : authMode === 'register' ? (
+                      <button onClick={() => setAuthMode('login')} className="text-xs text-pink-400 hover:text-pink-300 font-semibold">
+                        Voltar para o Login Seguro
+                      </button>
+                    ) : null}
+                    
+                    {isOfflineMode && (
+                      <button onClick={() => setShowConfigModal(true)} className="text-xs text-purple-400 hover:text-purple-300 font-mono">
+                        &gt;_ Conectar Banco do Firebase
+                      </button>
+                    )}
+                  </div>
+
+                </div>
+              </div>
+            )}
+
+            {/* PAINEL LOGADO DE ABAS */}
+            {user && (
+              <div className="space-y-6">
+                
+                {/* Menu de Navegação */}
+                <div className="flex border-b border-purple-950/60 overflow-x-auto text-sm">
+                  <button onClick={() => setActiveTab('dashboard')} class={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'dashboard' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                    <span>Balanço & Enviar</span>
+                  </button>
+                  <button onClick={() => setActiveTab('farm')} class={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'farm' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                    <span>Área de Farm NTC</span>
+                  </button>
+                  <button onClick={() => setActiveTab('cyber-profile')} class={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'cyber-profile' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                    <span>Meu Perfil Cyber</span>
+                  </button>
+                  <button onClick={() => setActiveTab('home-reviews')} class={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'home-reviews' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                    <span>Mural de Resenhas em Casa</span>
+                  </button>
+                  <button onClick={() => setActiveTab('embed')} className={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'embed' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                    <span>Widget Embed</span>
+                  </button>
+                </div>
+
+                {/* ABA 1: PAINEL PRINCIPAL */}
+                {activeTab === 'dashboard' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
+                    <div className="lg:col-span-2 space-y-6">
+                      <div class={`bg-gradient-to-r ${currentNeon.bgTo} border ${currentNeon.border} rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between h-[210px] transition-all ${currentNeon.glow}`}>
+                        <div className="absolute right-[-10px] top-[-10px] opacity-10 font-orbitron font-extrabold text-9xl text-white pointer-events-none select-none">NTC</div>
+                        <div>
+                          <p className="text-xs uppercase tracking-widest text-purple-200 font-semibold">Chave de Endereço</p>
+                          <span className="font-mono text-xs text-gray-300 bg-black/40 px-3 py-1 rounded-lg border border-purple-950 block mt-1 w-fit select-all">{walletAddress}</span>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-widest text-purple-200 font-semibold">Balanço Acumulado</p>
+                          <div className="flex items-baseline space-x-2">
+                            <span className="text-4xl md:text-5xl font-extrabold font-orbitron text-transparent bg-clip-text bg-gradient-to-r from-purple-200 via-pink-100 to-white">{balance.toFixed(4)}</span>
+                            <span className="text-pink-400 font-orbitron font-bold">NTC</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ENVIAR MOEDA DE FORMA REALISTA */}
+                      <form onSubmit={handleRealTransfer} className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 space-y-4">
+                        <h3 className="text-md font-orbitron font-bold text-purple-300">Enviar Moeda NTC (P2P Real)</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] text-gray-400 uppercase mb-1">Endereço de Destino</label>
+                            <input 
+                              type="text" 
+                              value={sendTargetAddress}
+                              onChange={(e) => setSendTargetAddress(e.target.value)}
+                              placeholder="EX: NTC0x..." 
+                              className="w-full bg-black/40 border border-purple-900/40 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none" 
+                            />
+                            {isValidatingAddress && <p className="text-[10px] text-yellow-500 mt-1">Buscando na rede...</p>}
+                            {targetUserFound && (
+                              <p className="text-[10px] text-emerald-400 mt-1">✔ Destinatário encontrado: <strong>@{targetUserFound.username}</strong></p>
+                            )}
+                            {sendTargetAddress.length >= 10 && !targetUserFound && !isValidatingAddress && (
+                              <p className="text-[10px] text-red-400 mt-1">✘ Endereço não registrado ou inválido.</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-gray-400 uppercase mb-1">Quantidade</label>
+                            <input 
+                              type="number" 
+                              step="any"
+                              value={sendAmount}
+                              onChange={(e) => setSendAmount(e.target.value)}
+                              placeholder="0.00" 
+                              className="w-full bg-black/40 border border-purple-900/40 rounded-xl px-4 py-2.5 text-xs text-white font-orbitron focus:outline-none" 
+                            />
+                          </div>
+                        </div>
+                        <button 
+                          type="submit" 
+                          disabled={!targetUserFound}
+                          class={`px-5 py-2.5 rounded-xl font-orbitron font-bold text-xs transition flex items-center space-x-1.5 ${targetUserFound ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                        >
+                          <i data-lucide="send" className="w-3.5 h-3.5"></i>
+                          <span>CONFIRMAR E TRANSFERIR</span>
+                        </button>
+                      </form>
+                    </div>
+
+                    <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 h-[340px] flex flex-col justify-between">
+                      <div>
+                        <h3 className="text-md font-orbitron font-bold text-purple-300 mb-4">Histórico de Transações</h3>
+                        <div className="space-y-2 overflow-y-auto max-h-[220px] pr-1">
+                          {history.map((tx) => (
+                            <div key={tx.id} className="bg-black/30 border border-purple-950 p-2.5 rounded-xl flex justify-between items-center text-xs">
+                              <div>
+                                <p className="font-semibold text-gray-200">{tx.type}</p>
+                                <p className="text-[9px] text-gray-500">{tx.date}</p>
+                              </div>
+                              <span class={`font-mono font-bold ${tx.amount > 0 ? 'text-green-400' : 'text-gray-400'}`}>{tx.amount > 0 ? `+${tx.amount.toFixed(2)}` : tx.amount.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ABA 2: ÁREA DE FARM NTC */}
+                {activeTab === 'farm' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      
+                      {/* FARM 1: ROLETA */}
+                      <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 flex flex-col justify-between">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold bg-pink-500/20 text-pink-400 px-2.5 py-1 rounded-full border border-pink-500/20 font-orbitron">Farm Instantâneo</span>
+                          <h3 className="text-xl font-orbitron font-black mt-3">Roleta Molecular</h3>
+                          
+                          <div className="my-6 flex justify-center items-center relative">
+                            <div style={{ transform: `rotate(${spinRotation.current}deg)`, transition: isSpinning ? 'transform 3s cubic-bezier(0.15, 0.85, 0.35, 1)' : 'none' }} className="w-40 h-40 rounded-full border-4 border-pink-500/80 bg-black flex items-center justify-center relative shadow-lg">
+                              <div className="absolute inset-0 rounded-full border-2 border-dashed border-purple-500/30 animate-spin-slow"></div>
+                              <span className="font-orbitron font-bold text-[10px] text-purple-300">NTC MATRIX</span>
+                            </div>
+                            <div className="absolute -top-2 text-pink-500 transform rotate-180">
+                              <i data-lucide="triangle" className="w-5 h-5 fill-current"></i>
+                            </div>
+                          </div>
+
+                          {spinResult && (
+                            <div className="p-2.5 bg-purple-950/30 border border-purple-500/30 rounded-xl text-center text-xs mb-3">
+                              Resultado: <strong className="text-pink-400">{spinResult.label}</strong>
+                            </div>
+                          )}
+                        </div>
+
+                        {spinCooldown > 0 ? (
+                          <button disabled className="w-full py-2 bg-gray-900 text-gray-500 text-xs font-bold rounded-xl cursor-not-allowed">COOLDOWN: {spinCooldown}s</button>
+                        ) : (
+                          <button onClick={spinWheel} disabled={isSpinning} class={`w-full py-2.5 ${currentNeon.bg} ${currentNeon.hoverBg} text-white font-orbitron text-xs font-bold rounded-xl transition`}>GIRAR ROLETA</button>
+                        )}
+                      </div>
+
+                      {/* FARM 2: MOTORES */}
+                      <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 space-y-4">
+                        <span className="text-[10px] uppercase font-bold bg-green-500/20 text-green-400 px-2.5 py-1 rounded-full border border-green-500/20 font-orbitron">Motores Térmicos de Farm</span>
+                        <h3 className="text-xl font-orbitron font-black">Estação de Mineração</h3>
+                        
+                        <div className="space-y-4 pt-2">
+                          <div className="bg-black/40 border border-purple-950 p-3 rounded-xl flex justify-between items-center">
+                            <div>
+                              <h4 className="text-xs font-bold text-gray-200">Solar Harvester (Grátis)</h4>
+                              <p className="text-[10px] text-gray-500">Rende 0.5 NTC a cada 5 minutos</p>
+                              {engines.solar.active && (
+                                <div className="w-32 bg-gray-900 h-1 rounded-full overflow-hidden mt-1.5">
+                                  <div style={{ width: `${((engines.solar.duration - engines.solar.timeLeft)/engines.solar.duration)*100}%` }} className="bg-green-500 h-full"></div>
+                                </div>
+                              )}
+                            </div>
+                            {engines.solar.active ? (
+                              <span className="text-[10px] text-green-400 font-mono">+{engines.solar.accumulated.toFixed(3)} NTC</span>
+                            ) : (
+                              <button onClick={() => startEngine('solar')} className="px-2.5 py-1 bg-green-600 hover:bg-green-500 rounded text-[10px] font-bold">Ativar</button>
+                            )}
+                          </div>
+
+                          <div className="bg-black/40 border border-purple-950 p-3 rounded-xl flex justify-between items-center">
+                            <div>
+                              <h4 className="text-xs font-bold text-gray-200">Quantum Engine (Grátis)</h4>
+                              <p className="text-[10px] text-gray-500">Rende 4.0 NTC a cada 30 minutos</p>
+                              {engines.quantum.active && (
+                                <div className="w-32 bg-gray-900 h-1 rounded-full overflow-hidden mt-1.5">
+                                  <div style={{ width: `${((engines.quantum.duration - engines.quantum.timeLeft)/engines.quantum.duration)*100}%` }} className="bg-green-500 h-full"></div>
+                                </div>
+                              )}
+                            </div>
+                            {engines.quantum.active ? (
+                              <span className="text-[10px] text-green-400 font-mono">+{engines.quantum.accumulated.toFixed(3)} NTC</span>
+                            ) : (
+                              <button onClick={() => startEngine('quantum')} className="px-2.5 py-1 bg-green-600 hover:bg-green-500 rounded text-[10px] font-bold">Ativar</button>
+                            )}
+                          </div>
+
+                          <div className="bg-black/40 border border-purple-950 p-3 rounded-xl flex justify-between items-center relative overflow-hidden">
+                            {!unlockedFeatures.fusionEngine && (
+                              <div className="absolute inset-0 bg-black/95 backdrop-blur-sm z-10 flex items-center justify-between px-3 text-xs">
+                                <span className="text-gray-400 font-bold">Destrave o Reator Fusion</span>
+                                <button onClick={() => unlockWidget('fusionEngine')} className="px-2.5 py-1 bg-pink-600 hover:bg-pink-500 rounded text-[10px] font-bold">Destravar (10 NTC)</button>
+                              </div>
+                            )}
+                            <div>
+                              <h4 className="text-xs font-bold text-gray-200">Fusion Reactor (Nível Avançado)</h4>
+                              <p className="text-[10px] text-gray-500">Rende 15.0 NTC a cada 60 minutos</p>
+                              {engines.fusion.active && (
+                                <div className="w-32 bg-gray-900 h-1 rounded-full overflow-hidden mt-1.5">
+                                  <div style={{ width: `${((engines.fusion.duration - engines.fusion.timeLeft)/engines.fusion.duration)*100}%` }} className="bg-green-500 h-full"></div>
+                                </div>
+                              )}
+                            </div>
+                            {engines.fusion.active ? (
+                              <span className="text-[10px] text-green-400 font-mono">+{engines.fusion.accumulated.toFixed(3)} NTC</span>
+                            ) : (
+                              <button onClick={() => startEngine('fusion')} className="px-2.5 py-1 bg-green-600 hover:bg-green-500 rounded text-[10px] font-bold">Ativar</button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
+                {/* ABA 3: PERFIL CYBER */}
+                {activeTab === 'cyber-profile' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
+                    <div className="lg:col-span-1 space-y-6">
+                      
+                      <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 relative overflow-hidden">
+                        {!unlockedFeatures.neonThemes && (
+                          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-4 text-center">
+                            <h4 className="text-xs font-bold text-gray-100 mb-1 font-orbitron">Widget Neon Cyber</h4>
+                            <button onClick={() => unlockWidget('neonThemes')} className="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-[10px] font-bold rounded-xl text-white">Liberar por 5.0 NTC</button>
+                          </div>
+                        )}
+                        <h3 className="text-xs font-orbitron font-bold text-purple-300 uppercase tracking-widest mb-3">Neon Molecular</h3>
+                        <div className="grid grid-cols-5 gap-2">
+                          {Object.keys(neonClasses).map((key) => (
+                            <button key={key} onClick={() => setActiveNeon(key)} class={`h-8 rounded-lg border ${key === activeNeon ? 'border-white' : 'border-transparent'} transition`} style={{ backgroundColor: neonClasses[key].shadow }}></button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 space-y-3">
+                        <h3 className="text-xs font-orbitron font-bold text-purple-300 uppercase tracking-widest">Identidade na Rede</h3>
+                        <textarea value={profileBio} onChange={(e) => setProfileBio(e.target.value)} rows="3" className="w-full bg-black/40 border border-purple-900/40 rounded-xl px-3 py-2 text-xs focus:outline-none"></textarea>
+                      </div>
+
+                      <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 relative overflow-hidden">
+                        {!unlockedFeatures.youtubePlayer && (
+                          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-4 text-center">
+                            <h4 className="text-xs font-bold text-gray-100 mb-1 font-orbitron">YouTube Music Player</h4>
+                            <button onClick={() => unlockWidget('youtubePlayer')} className="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-[10px] font-bold rounded-xl">Liberar por 10.0 NTC</button>
+                          </div>
+                        )}
+                        <h3 className="text-xs font-orbitron font-bold text-purple-300 uppercase mb-3">Cyber Sound System</h3>
+                        <iframe width="100%" height="110" src={`https://www.youtube.com/embed/${youtubeId}`} className="rounded-xl border border-purple-900/40" frameBorder="0" allowFullScreen></iframe>
+                        <div className="flex gap-1.5 mt-2">
+                          <input type="text" value={youtubeInput} onChange={(e) => setYoutubeInput(e.target.value)} placeholder="URL YouTube..." className="flex-grow bg-black/40 border border-purple-900/40 rounded-lg px-2 py-1 text-xs focus:outline-none" />
+                          <button onClick={() => {
+                            const vId = youtubeInput.includes('v=') ? youtubeInput.split('v=')[1].split('&')[0] : youtubeInput;
+                            setYoutubeId(vId);
+                            showToastMessage("Soundtrack sincronizada!");
+                          }} className="px-2 py-1 bg-purple-900/60 rounded text-xs font-bold">Mudar</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-2 space-y-6">
+                      <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6">
+                        <h3 className="text-xs font-orbitron font-bold text-purple-300 uppercase tracking-widest mb-2">Painel SEO - Script de Divulgação de Resenhas</h3>
+                        <p className="text-xs text-gray-400 mb-4">Autorize mecanismos externos a indexarem as páginas das suas festas e resenhas domésticas na rede:</p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="bg-black/30 border border-purple-950 p-3 rounded-xl flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs font-bold text-gray-100">Google Crawler</span>
+                                <input type="checkbox" checked={seoAuths.googleCrawler} onChange={(e) => setSeoAuths({...seoAuths, googleCrawler: e.target.checked})} className="rounded focus:ring-0" />
+                              </div>
+                              <p className="text-[10px] text-gray-500 leading-tight">Permite indexação direta no buscador do Google.</p>
+                            </div>
+                          </div>
+
+                          <div className="bg-black/30 border border-purple-950 p-3 rounded-xl flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs font-bold text-gray-100">OpenGraph Redes</span>
+                                <input type="checkbox" checked={seoAuths.openGraph} onChange={(e) => setSeoAuths({...seoAuths, openGraph: e.target.checked})} className="rounded focus:ring-0" />
+                              </div>
+                              <p className="text-[10px] text-gray-500 leading-tight">Mostra imagem e título rico ao compartilhar no Insta/WhatsApp.</p>
+                            </div>
+                          </div>
+
+                          <div className="bg-black/30 border border-purple-950 p-3 rounded-xl flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs font-bold text-gray-100">Analytics Tracker</span>
+                                <input type="checkbox" checked={seoAuths.analyticsTracker} onChange={(e) => setSeoAuths({...seoAuths, analyticsTracker: e.target.checked})} className="rounded focus:ring-0" />
+                              </div>
+                              <p className="text-[10px] text-gray-500 leading-tight">Dispara contagem de visualizações da página do seu evento.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 bg-black/60 border border-purple-950 p-3 rounded-xl font-mono text-[9px] text-pink-400 overflow-x-auto leading-relaxed">
+                          <span>&lt;!-- NTC Generated SEO Tags --&gt;</span><br />
+                          {seoAuths.googleCrawler && <span className="block">&lt;meta name="robots" content="index, follow" /&gt;</span>}
+                          {seoAuths.openGraph && (
+                            <>
+                              <span className="block">&lt;meta property="og:title" content="Resenha de @{user} - NTC System" /&gt;</span>
+                              <span className="block">&lt;meta property="og:description" content="Encontre e acelere na nossa resenha doméstica de forma segura." /&gt;</span>
+                            </>
+                          )}
+                          {seoAuths.analyticsTracker && <span className="block">&lt;script src="https://analytics.ntc-network.net/tracker.js" defer&gt;&lt;/script&gt;</span>}
+                          {!seoAuths.googleCrawler && !seoAuths.openGraph && !seoAuths.analyticsTracker && <span className="text-gray-600 block">Ative as autorizações acima para visualizar as tags dinâmicas.</span>}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 flex flex-col justify-between h-[250px]">
+                          <div>
+                            <h3 className="text-xs font-orbitron font-bold text-purple-300 uppercase tracking-widest mb-2">Mural de Notas</h3>
+                            <div className="space-y-2 overflow-y-auto max-h-[120px] pr-1">
+                              {notesList.map((note) => (
+                                <div key={note.id} className="bg-black/40 border border-purple-950 p-2 rounded-xl flex justify-between items-center text-xs">
+                                  <p className="text-gray-300 break-all max-w-[80%]">{note.text}</p>
+                                  <button onClick={() => removeStickyNote(note.id)} className="text-gray-500 hover:text-red-400">&times;</button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <input type="text" value={newNoteText} onChange={(e) => setNewNoteText(e.target.value)} placeholder="Nova nota..." className="flex-grow bg-black/40 border border-purple-900/40 rounded-xl px-2 py-1 text-xs focus:outline-none" />
+                            <button onClick={addStickyNote} className="px-3 bg-purple-900/60 rounded-xl font-bold text-xs">+</button>
+                          </div>
+                        </div>
+
+                        <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 h-[250px]">
+                          <h3 className="text-xs font-orbitron font-bold text-purple-300 uppercase tracking-widest mb-3">Agenda Semanal</h3>
+                          <div className="grid grid-cols-7 gap-1 text-center font-mono text-[10px] mt-2">
+                            <span className="text-gray-500 font-bold">D</span><span className="text-gray-500 font-bold">S</span><span className="text-gray-500 font-bold">T</span><span className="text-gray-500 font-bold">Q</span><span className="text-gray-500 font-bold">Q</span><span className="text-gray-500 font-bold">S</span><span className="text-gray-500 font-bold">S</span>
+                            <div className="p-1 bg-purple-950/20 text-gray-500 rounded">21</div>
+                            <div className="p-1 bg-purple-950/20 text-gray-500 rounded">22</div>
+                            <div className="p-1 bg-purple-950/20 text-gray-500 rounded">23</div>
+                            <div className="p-1 bg-purple-950/20 text-gray-500 rounded">24</div>
+                            <div className="p-1 bg-purple-950/20 text-gray-500 rounded">25</div>
+                            <div className="p-1 bg-pink-900/40 text-pink-300 font-bold rounded animate-pulse">26</div>
+                            <div className="p-1 bg-purple-950/20 text-gray-500 rounded">27</div>
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-4 leading-tight text-center">Finais de semana destacados automaticamente para melhor foco em frevos.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ABA 4: MURAL DE RESENHAS */}
+                {activeTab === 'home-reviews' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
+                    <div className="lg:col-span-1 bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 h-fit">
+                      <span className="text-[10px] uppercase font-bold bg-purple-500/20 text-purple-300 px-2.5 py-1 rounded-full border border-purple-500/20 font-orbitron">Consensual Setup</span>
+                      <h3 className="text-lg font-orbitron font-black mt-3 mb-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300">Relatar Minha Resenha</h3>
+                      <p className="text-xs text-gray-400 mb-4 leading-relaxed">Conte como foi a reunião ou resenha feita em casa para acumular reputação (NTC) no portal de forma descentralizada:</p>
+
+                      <form onSubmit={publishHomeReview} className="space-y-3.5">
+                        <div>
+                          <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-1">Título do Relato</label>
+                          <input type="text" value={newReview.title} onChange={(e) => setNewReview({...newReview, title: e.target.value})} placeholder="Ex: Aniversário Cyber Lofi" className="w-full bg-black/40 border border-purple-900/40 rounded-xl px-3 py-2 text-xs focus:outline-none" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-1">Anfitrião (Host)</label>
+                          <input type="text" value={newReview.host} onChange={(e) => setNewReview({...newReview, host: e.target.value})} placeholder="Ex: Lucas Acelera" className="w-full bg-black/40 border border-purple-900/40 rounded-xl px-3 py-2 text-xs focus:outline-none" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-1">Nota da Vibe (1 a 5)</label>
+                          <select value={newReview.vibe} onChange={(e) => setNewReview({...newReview, vibe: e.target.value})} className="w-full bg-[#0c0c16] border border-purple-900/40 rounded-xl px-3 py-2 text-xs focus:outline-none text-pink-400 font-bold">
+                            <option value="5">🔥 5 - Vibe Absoluta</option>
+                            <option value="4">✨ 4 - Encontro Incrível</option>
+                            <option value="3">🎵 3 - Som Lofi de Qualidade</option>
+                            <option value="2">💤 2 - Conversa Suave</option>
+                            <option value="1">💤 1 - Pouca Movimentação</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-1">Como foi a experiência?</label>
+                          <textarea rows="3" value={newReview.reviewText} onChange={(e) => setNewReview({...newReview, reviewText: e.target.value})} placeholder="Escreva os detalhes, playlist, petiscos..." className="w-full bg-black/40 border border-purple-900/40 rounded-xl px-3 py-2 text-xs focus:outline-none"></textarea>
+                        </div>
+
+                        <div className="flex items-start space-x-2 bg-purple-950/20 p-2.5 rounded-xl border border-purple-900/30">
+                          <input type="checkbox" checked={newReview.consented} onChange={(e) => setNewReview({...newReview, consented: e.target.checked})} className="rounded focus:ring-0 mt-0.5" />
+                          <p className="text-[10px] text-purple-300 leading-tight">Certifico que todos os participantes deram consentimento para este relato de forma consensual no app.</p>
+                        </div>
+
+                        <button type="submit" className="w-full py-2 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-orbitron font-bold text-xs rounded-xl transition shadow-lg flex items-center justify-center space-x-1">
+                          <span>Publicar Relato</span>
+                          <span className="text-[9px] bg-black/40 px-1.5 py-0.2 rounded">+1.0 NTC</span>
+                        </button>
+                      </form>
+                    </div>
+
+                    <div className="lg:col-span-2 bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 font-sans">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-sm font-orbitron font-bold text-purple-300 uppercase tracking-widest">Feed Colaborativo de Resenhas Domésticas</h3>
+                        <span className="text-[9px] text-green-400 font-bold bg-green-950/30 px-2 py-0.5 rounded border border-green-500/20 flex items-center space-x-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-ping"></span>
+                          <span>Tempo Real Ativo</span>
+                        </span>
+                      </div>
+
+                      <div className="space-y-4 overflow-y-auto max-h-[500px] pr-1 text-xs">
+                        {homeReviews.length === 0 ? (
+                          <div className="text-center py-10 text-gray-500 italic">
+                            Nenhum relato doméstico publicado ainda nesta rede. Compartilhe de forma consensual!
+                          </div>
+                        ) : (
+                          homeReviews.map((review, idx) => (
+                            <div key={idx} className="bg-black/30 border border-purple-950/60 p-4 rounded-xl space-y-2 relative">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h4 className="font-bold text-sm text-gray-200">{review.title}</h4>
+                                  <p className="text-[10px] text-gray-500">Host: <span className="text-gray-300 font-semibold">{review.host}</span></p>
+                                </div>
+                                <span className="bg-purple-900/20 text-purple-300 border border-purple-500/20 text-[9px] px-2 py-0.5 rounded-full">
+                                  {"★".repeat(review.vibe)}{"☆".repeat(5 - review.vibe)}
+                                </span>
+                              </div>
+                              <p className="text-gray-300 text-xs italic leading-relaxed">"{review.reviewText}"</p>
+                              <div className="flex justify-between items-center text-[9px] text-gray-500 pt-1.5 border-t border-purple-950/60 font-mono">
+                                <span>Relato por: @{review.author}</span>
+                                <span>{review.timestamp}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ABA 5: WIDGET EMBED */}
+                {activeTab === 'embed' && (
+                  <div className="space-y-6 animate-fadeIn">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      
+                      {/* GERADOR DE EMBED */}
+                      <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 space-y-4">
+                        <h3 className="text-lg font-orbitron font-black text-purple-300 mb-4">Gerador de Widget Embed</h3>
+                        <p className="text-xs text-gray-400 mb-4">Crie widgets embarcados para suas páginas ou aplicações externas:</p>
+                        
+                        <div>
+                          <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-2">Tipo de Widget</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setEmbedType('send')} className={`py-2.5 px-3 rounded-xl text-xs font-bold transition ${embedType === 'send' ? 'bg-pink-600 text-white' : 'bg-gray-900 text-gray-300'}`}>💳 ENVIAR NTC</button>
+                            <button onClick={() => setEmbedType('receive')} className={`py-2.5 px-3 rounded-xl text-xs font-bold transition ${embedType === 'receive' ? 'bg-pink-600 text-white' : 'bg-gray-900 text-gray-300'}`}>💰 RECEBER NTC</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-2">Endereço NTC (Seu)</label>
+                          <div className="flex gap-1">
+                            <input type="text" value={embedWallet} onChange={(e) => setEmbedWallet(e.target.value)} placeholder={walletAddress} className="flex-grow bg-black/40 border border-purple-900/40 rounded-xl px-3 py-2.5 text-xs font-mono focus:outline-none" />
+                            <button onClick={() => setEmbedWallet(walletAddress)} className="px-3 py-2.5 bg-purple-900/60 hover:bg-purple-800 rounded-xl text-xs font-bold">Auto</button>
+                          </div>
+                        </div>
+
+                        {embedType === 'send' && (
+                          <div>
+                            <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-2">Quantidade NTC Predefinida</label>
+                            <input type="number" step="0.01" value={embedAmount} onChange={(e) => setEmbedAmount(e.target.value)} className="w-full bg-black/40 border border-purple-900/40 rounded-xl px-3 py-2.5 text-xs font-mono focus:outline-none" />
+                          </div>
+                        )}
+
+                        <div className="bg-black/60 border border-purple-950 p-3 rounded-xl">
+                          <p className="text-[10px] text-gray-400 mb-2 uppercase font-semibold">Código HTML para Copiar:</p>
+                          <div className="bg-black/40 p-3 rounded-lg border border-purple-950/60 overflow-x-auto font-mono text-[9px] text-pink-400 select-all">
+                            {embedType === 'send' ? 
+                              `<iframe src="${window.location.origin}?embed=send&wallet=${embedWallet || 'SUAWALLET'}&amount=${embedAmount}" width="400" height="200" style="border:none;border-radius:12px;"></iframe>`
+                              : `<iframe src="${window.location.origin}?embed=receive&wallet=${embedWallet || 'SUAWALLET'}" width="300" height="150" style="border:none;border-radius:12px;"></iframe>`
+                            }
+                          </div>
+                          <button onClick={() => {
+                            const code = embedType === 'send' ? 
+                              `<iframe src="${window.location.origin}?embed=send&wallet=${embedWallet || 'SUAWALLET'}&amount=${embedAmount}" width="400" height="200" style="border:none;border-radius:12px;"></iframe>`
+                              : `<iframe src="${window.location.origin}?embed=receive&wallet=${embedWallet || 'SUAWALLET'}" width="300" height="150" style="border:none;border-radius:12px;"></iframe>`;
+                            navigator.clipboard.writeText(code);
+                            showToastMessage("Código copiado para clipboard!");
+                          }} className="w-full mt-2 py-2 bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold rounded-lg transition">
+                            Copiar Código
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* PRÉVIA DO EMBED */}
+                      <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 flex flex-col justify-between">
+                        <div>
+                          <h3 className="text-sm font-orbitron font-black text-purple-300 mb-4">Prévia do Widget</h3>
+                          <div className="bg-black/60 rounded-xl border border-purple-950 p-4 aspect-video flex items-center justify-center">
+                            {embedType === 'send' ? (
+                              <div className="text-center">
+                                <p className="text-xs text-gray-400 mb-3">Widget de Envio:</p>
+                                <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/30 rounded-lg p-4">
+                                  <p className="text-[10px] text-gray-300 mb-2">Enviar para:</p>
+                                  <p className="text-xs font-mono text-pink-400 mb-3 break-all">{embedWallet || '0x...'}</p>
+                                  <p className="text-[10px] text-gray-300 mb-1">Quantidade:</p>
+                                  <p className="text-sm font-bold text-emerald-400">{embedAmount} NTC</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center">
+                                <p className="text-xs text-gray-400 mb-3">Widget de Recebimento:</p>
+                                <div className="bg-gradient-to-r from-emerald-900/40 to-cyan-900/40 border border-emerald-500/30 rounded-lg p-4">
+                                  <p className="text-[10px] text-gray-300">Recebedor:</p>
+                                  <p className="text-xs font-mono text-emerald-400 break-all">{embedWallet || '0x...'}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-4 text-center italic">Os iframes se adaptam automaticamente em qualquer site externo</p>
+                      </div>
+                    </div>
+
+                    {/* EXEMPLOS DE USO */}
+                    <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6">
+                      <h3 className="text-sm font-orbitron font-bold text-purple-300 mb-4">Exemplos de Integração em Sites</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div className="bg-black/40 border border-purple-950 p-3 rounded-lg">
+                          <p className="font-bold text-purple-300 mb-2">1️⃣ Blog/Portfólio</p>
+                          <p className="text-gray-400 leading-relaxed">Cole um widget de recebimento para aceitar doações de seus seguidores direto no seu site.</p>
+                        </div>
+                        <div className="bg-black/40 border border-purple-950 p-3 rounded-lg">
+                          <p className="font-bold text-purple-300 mb-2">2️⃣ Loja Online</p>
+                          <p className="text-gray-400 leading-relaxed">Insira um widget de envio pré-configurado para cobrar pelos produtos com NTC.</p>
+                        </div>
+                        <div className="bg-black/40 border border-purple-950 p-3 rounded-lg">
+                          <p className="font-bold text-purple-300 mb-2">3️⃣ Eventos/Festas</p>
+                          <p className="text-gray-400 leading-relaxed">Divulgue seu endereço NTC na página do seu evento para receber contribuições.</p>
+                        </div>
+                        <div className="bg-black/40 border border-purple-950 p-3 rounded-lg">
+                          <p className="font-bold text-purple-300 mb-2">4️⃣ Redes Sociais</p>
+                          <p className="text-gray-400 leading-relaxed">Compartilhe o código no Instagram Bio, TikTok ou YouTube para ganhar NTC.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ABA 6: INTEGRAÇÃO API (Com Jogo Simulador Playground) */}
+                {activeTab === 'api-doc' && (
+                  <div className="bg-[#0c0c16] border border-purple-900/40 rounded-2xl p-6 space-y-6 animate-fadeIn">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      
+                      {/* Documentação */}
+                      <div className="space-y-4">
+                        <h3 className="text-xl font-orbitron font-black text-purple-300">Documentação do Barramento Web (API)</h3>
+                        <p className="text-xs text-gray-400 leading-relaxed">
+                          Seu jogo ou aplicativo parceiro pode enviar requisições de débito (gastar moedas) ou crédito (ganhar moedas por farm) se comunicando diretamente com o frame da carteira usando nossa interface segura de mensagens cruzadas (<code className="bg-black/80 px-1 py-0.5 rounded text-pink-400">window.postMessage</code>).
+                        </p>
+
+                        <div className="bg-black/40 border border-purple-950 p-4 rounded-xl font-mono text-[10px] text-pink-300 space-y-1 whitespace-pre">
+                          <p className="text-gray-500">// 1. Solicitar transação de débito (Cobrar NTC)</p>
+                          <pre className="text-pink-300">{`window.opener.postMessage({
+  source: "NTC_PARTNER_SITE",
+  type: "REQUEST_TRANSACTION",
+  txType: "SPEND", // SPEND para debitar saldo
+  amount: 2.50,
+  label: "Espada Laser Aceleriana"
+}, "*");`}</pre>
+                        </div>
+                      </div>
+
+                      {/* Playground Jogo Simulador */}
+                      <div className="bg-black/50 border border-purple-950 p-6 rounded-2xl flex flex-col justify-between space-y-4">
+                        <div>
+                          <span className="text-[9px] font-bold bg-purple-900/40 text-purple-300 border border-purple-800/40 px-2.5 py-1 rounded-full uppercase font-orbitron">Playground de Teste de Transações</span>
+                          <h4 className="text-sm font-bold text-gray-200 mt-2">Mini-Jogo Simulador Integrado</h4>
+                          <p className="text-[11px] text-gray-500 mt-1">Gaste 1 NTC para apostar e coletar moedas, ou recolha recompensas gratuitas para validar as transações reais da sua carteira em nuvem!</p>
+                        </div>
+
+                        <div className="bg-[#07070f] rounded-xl border border-purple-950 p-4 flex flex-col items-center justify-center text-center space-y-4">
+                          <div className="flex items-center space-x-6">
+                            <div>
+                              <p className="text-[10px] text-gray-500 uppercase">Aposta por clique</p>
+                              <strong className="text-pink-400 text-sm font-orbitron">-1.00 NTC</strong>
+                            </div>
+                            <div className="h-6 w-[1px] bg-purple-950"></div>
+                            <div>
+                              <p className="text-[10px] text-gray-500 uppercase">Prêmio Aleatório</p>
+                              <strong className="text-emerald-400 text-sm font-orbitron">Até +5.00 NTC</strong>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 w-full">
+                            <button 
+                              onClick={() => {
+                                // Simula postMessage disparado pelo próprio playground como se fosse app externo
+                                window.postMessage({
+                                  source: 'NTC_PARTNER_SITE',
+                                  type: 'REQUEST_TRANSACTION',
+                                  txType: 'SPEND',
+                                  amount: 1.0,
+                                  label: 'Aposta Mini-Jogo',
+                                  requestId: 'SIM-' + Math.random().toString(36).substr(2, 6).toUpperCase()
+                                }, '*');
+                              }}
+                              className="flex-grow py-2 bg-pink-900/50 hover:bg-pink-900 border border-pink-700/50 rounded-xl text-[11px] font-bold font-orbitron text-pink-300 transition"
+                            >
+                              APOSTAR 1.0 NTC
+                            </button>
+
+                            <button 
+                              onClick={() => {
+                                window.postMessage({
+                                  source: 'NTC_PARTNER_SITE',
+                                  type: 'REQUEST_TRANSACTION',
+                                  txType: 'EARN',
+                                  amount: 3.0,
+                                  label: 'Recompensa Mini-Jogo',
+                                  requestId: 'SIM-' + Math.random().toString(36).substr(2, 6).toUpperCase()
+                                }, '*');
+                              }}
+                              className="flex-grow py-2 bg-emerald-900/50 hover:bg-emerald-900 border border-emerald-700/50 rounded-xl text-[11px] font-bold font-orbitron text-emerald-300 transition"
+                            >
+                              CLAIM RECOMPENSA (+3)
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+
+          {/* Rodapé do ecossistema */}
+          <footer className="border-t border-purple-950 bg-black/40 px-6 py-4 text-center mt-8 text-[11px] text-gray-500 font-sans">
+            <p>Notoriety Coin Wallet &copy; 2026. Feito para aceleradores e exploradores galácticos da rede AceleraNet.</p>
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>

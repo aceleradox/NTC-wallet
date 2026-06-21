@@ -1,0 +1,69 @@
+🚀 SETUP GitHub + Pages + Codespaces
+
+=============================================
+
+✅ CHECKLIST FINAL (5 passos):
+
+1. PREPARAR LOCALMENTE
+   [ ] Delete arquivos desnecessários (veja CLEANUP.txt)
+   [ ] Renomeie: BACKEND_README_UPDATED.md → BACKEND.md
+   [ ] Verifique: .gitignore
+   [ ] git add . && git commit -m "cleanup"
+
+2. CRIAR REPO NO GITHUB
+   [ ] Acesse github.com
+   [ ] New repository → ntc-wallet
+   [ ] NÃO inicialize com README (você já tem)
+   [ ] Create repository
+
+3. PUSH PARA GITHUB
+   [ ] Copie URL do repo (git remote add origin ...)
+   [ ] Execute:
+       git remote add origin https://github.com/seu-usuario/ntc-wallet.git
+       git branch -M main
+       git push -u origin main
+
+4. ATIVAR GITHUB PAGES
+   [ ] Settings → Pages
+   [ ] Source: main branch
+   [ ] Save
+   [ ] Espera 3-5 min (ativa automaticamente)
+
+5. TESTAR
+   [ ] Frontend: https://seu-usuario.github.io/ntc-wallet/
+   [ ] Code → Codespaces → Create
+   [ ] No terminal Codespaces:
+       npm install
+       npm start
+   [ ] Descomente BACKEND_URL em config.js (ou deixa auto)
+   [ ] Recarregue GitHub Pages
+   [ ] Teste transações!
+
+=============================================
+
+📋 GITHUB PAGES URL:
+   https://seu-usuario.github.io/ntc-wallet/Correção-de-HTML-e-React.html
+
+📋 BACKEND (Codespaces):
+   http://localhost:3000
+
+=============================================
+
+💡 DICAS:
+
+• Codespaces é GRÁTIS (60 horas/mês)
+• GitHub Pages é sempre gratuito
+• Não precisa pagar nada!
+• Funciona Windows, Mac, Linux
+• Compartilhe o link do GitHub Pages com qualquer um
+
+=============================================
+
+🎯 RESUMO:
+
+Frontend: GitHub Pages (automático após push)
+Backend: Codespaces (npm install && npm start)
+Database: JSON (sem dependências nativas)
+Total: Gratuito!
+
+=============================================
