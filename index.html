@@ -94,7 +94,7 @@
   </script>
 
   <!-- Script da aplicação React -->
-  <script type="text/babel" data-presets="react">
+  <script type="text/babel" data-presets="env,react">
     const { useState, useEffect, useRef } = React;
 
     const MNEMONIC_WORDS = [
@@ -115,6 +115,37 @@
       fusionEngine: { price: 10.0, label: "Desbloqueio Reator de Fusão", desc: "Habilita o motor ultra de 15 NTC por hora." }
     };
 
+    const generateNewSeed = () => {
+      let words = [];
+      for (let i = 0; i < 12; i++) {
+        const randomIndex = Math.floor(Math.random() * MNEMONIC_WORDS.length);
+        words.push(MNEMONIC_WORDS[randomIndex]);
+      }
+      return words.join(' ');
+    };
+
+    const generateAddressFromSeed = (seed) => {
+      const cleanSeed = seed.trim().toLowerCase();
+      let hash = 0;
+      
+      // Primeiro hash da semente
+      for (let i = 0; i < cleanSeed.length; i++) {
+        hash = cleanSeed.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      
+      // Gera um hash longo e consistente usando função determinística
+      let hex = '';
+      let value = Math.abs(hash);
+      
+      // Itera para criar um endereço de 40 caracteres (como padrão Ethereum)
+      for (let i = 0; i < 40; i++) {
+        value = (value * 7) ^ cleanSeed.charCodeAt(i % cleanSeed.length);
+        hex += Math.abs(value % 16).toString(16);
+      }
+      
+      return 'NTC0x' + hex.substring(0, 40).toUpperCase();
+    };
+
     function App() {
       // --- SISTEMA E CONEXÃO ---
       const [firebaseReady, setFirebaseReady] = useState(false);
@@ -129,6 +160,7 @@
       // --- ESTADOS DA CARTEIRA & USUÁRIO ---
       const [user, setUser] = useState(null); 
       const [walletAddress, setWalletAddress] = useState('');
+      const [showWalletAddress, setShowWalletAddress] = useState(false); // CONSERTADO: Estado adicionado com sucesso
       const [balance, setBalance] = useState(0.00);
       const [history, setHistory] = useState([]);
       const [activeTab, setActiveTab] = useState('auth'); 
@@ -404,7 +436,7 @@
         if (!firebaseReady || !user) return;
 
         if (isOfflineMode) {
-          // No modo simulado, checa transferências pendentes para si mesmo a cada 4 segundos
+          // No modo simulado, checa transferências pendentes para si mesmo a cada 3 segundos
           const claimInterval = setInterval(() => {
             const list = JSON.parse(localStorage.getItem('ntc_offline_pending_transfers')) || [];
             const mine = list.filter(t => t.toAddress === walletAddress && !t.claimed);
@@ -514,7 +546,7 @@
         setHistory(nextHistory);
 
         if (isOfflineMode) {
-          // Cria transferência na fila local simula
+          // Cria transferência na fila local simulada
           const transfers = JSON.parse(localStorage.getItem('ntc_offline_pending_transfers')) || [];
           transfers.push({
             id: newTx.id,
@@ -589,45 +621,6 @@
       const showToastMessage = (msg, type = "success") => {
         setToast({ message: msg, type });
         setTimeout(() => setToast(null), 4000);
-      };
-
-      const generateNewSeed = () => {
-        let words = [];
-        for (let i = 0; i < 12; i++) {
-          const randomIndex = Math.floor(Math.random() * MNEMONIC_WORDS.length);
-          words.push(MNEMONIC_WORDS[randomIndex]);
-        }
-        return words.join(' ');
-      };
-
-      const generateAddressFromSeed = (seed) => {
-        const cleanSeed = seed.trim().toLowerCase();
-        let hash = 0;
-        
-        // Primeiro hash da semente
-        for (let i = 0; i < cleanSeed.length; i++) {
-          hash = cleanSeed.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        
-        const cleanSeed = seed.trim().toLowerCase();
-        let hash = 0;
-        
-        // Primeiro hash da semente
-        for (let i = 0; i < cleanSeed.length; i++) {
-          hash = cleanSeed.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        
-        // Gera um hash longo e consistente usando função determinística
-        let hex = '';
-        let value = Math.abs(hash);
-        
-        // Itera para criar um endereço de 40 caracteres (como padrão Ethereum)
-        for (let i = 0; i < 40; i++) {
-          value = (value * 7) ^ cleanSeed.charCodeAt(i % cleanSeed.length);
-          hex += Math.abs(value % 16).toString(16);
-        }
-        
-        return 'NTC' + hex.substring(0, 40
       };
 
       // --- MÉTODOS DE CADASTRO E LOGIN ---
@@ -1213,10 +1206,10 @@
         <div className="flex-grow flex flex-col justify-between">
           
           {/* Header */}
-          <header class={`border-b border-purple-950/40 bg-black/80 backdrop-blur-md px-6 py-4 sticky top-0 z-40 transition-all ${currentNeon.glow}`}>
+          <header className={`border-b border-purple-950/40 bg-black/80 backdrop-blur-md px-6 py-4 sticky top-0 z-40 transition-all ${currentNeon.glow}`}>
             <div className="max-w-6xl mx-auto flex justify-between items-center font-orbitron">
               <div className="flex items-center space-x-3">
-                <div class={`h-10 w-10 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center ${currentNeon.glow}`}>
+                <div className={`h-10 w-10 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center ${currentNeon.glow}`}>
                   <span className="font-extrabold text-xl text-white">N</span>
                 </div>
                 <div>
@@ -1242,7 +1235,7 @@
                     <div className="h-6 w-[1px] bg-purple-950"></div>
                     <div className="text-right">
                       <span className="text-gray-500 block uppercase">Carteira Ativa</span>
-                      <span class={`${currentNeon.text}`}>@{user}</span>
+                      <span className={`${currentNeon.text}`}>@{user}</span>
                     </div>
                     {isOfflineMode ? (
                       <span className="text-yellow-500 flex items-center space-x-1" title="Modo Local Simulado (Sem Firebase)">
@@ -1289,7 +1282,7 @@
                     {pendingRequests[0].amount && (
                       <div className="mt-3 pt-2 border-t border-purple-950 flex justify-between items-center">
                         <span className="text-xs text-gray-400">Total Solicitado:</span>
-                        <span class={`text-sm font-orbitron font-bold ${pendingRequests[0].txType === 'SPEND' ? 'text-red-400' : 'text-green-400'}`}>
+                        <span className={`text-sm font-orbitron font-bold ${pendingRequests[0].txType === 'SPEND' ? 'text-red-400' : 'text-green-400'}`}>
                           {pendingRequests[0].txType === 'SPEND' ? '-' : '+'}{pendingRequests[0].amount.toFixed(2)} NTC
                         </span>
                       </div>
@@ -1365,7 +1358,7 @@
           {/* Toast de notificações */}
           {toast && (
             <div className="fixed bottom-6 right-6 z-50 animate-bounce">
-              <div class={`p-4 rounded-xl border flex items-center space-x-3 text-sm shadow-2xl ${toast.type === 'error' ? 'bg-red-950/90 border-red-500/50 text-red-300' : 'bg-emerald-950/90 border-emerald-500/50 text-emerald-300'}`}>
+              <div className={`p-4 rounded-xl border flex items-center space-x-3 text-sm shadow-2xl ${toast.type === 'error' ? 'bg-red-950/90 border-red-500/50 text-red-300' : 'bg-emerald-950/90 border-emerald-500/50 text-emerald-300'}`}>
                 <span>{toast.message}</span>
               </div>
             </div>
@@ -1487,16 +1480,16 @@
                 
                 {/* Menu de Navegação */}
                 <div className="flex border-b border-purple-950/60 overflow-x-auto text-sm">
-                  <button onClick={() => setActiveTab('dashboard')} class={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'dashboard' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                  <button onClick={() => setActiveTab('dashboard')} className={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'dashboard' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
                     <span>Balanço & Enviar</span>
                   </button>
-                  <button onClick={() => setActiveTab('farm')} class={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'farm' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                  <button onClick={() => setActiveTab('farm')} className={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'farm' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
                     <span>Área de Farm NTC</span>
                   </button>
-                  <button onClick={() => setActiveTab('cyber-profile')} class={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'cyber-profile' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                  <button onClick={() => setActiveTab('cyber-profile')} className={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'cyber-profile' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
                     <span>Meu Perfil Cyber</span>
                   </button>
-                  <button onClick={() => setActiveTab('home-reviews')} class={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'home-reviews' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                  <button onClick={() => setActiveTab('home-reviews')} className={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'home-reviews' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
                     <span>Mural de Resenhas em Casa</span>
                   </button>
                   <button onClick={() => setActiveTab('embed')} className={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'embed' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
@@ -1508,13 +1501,13 @@
                 {activeTab === 'dashboard' && (
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
                     <div className="lg:col-span-2 space-y-6">
-                      <div class={`bg-gradient-to-r ${currentNeon.bgTo} border ${currentNeon.border} rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between h-[210px] transition-all ${currentNeon.glow}`}>
+                      <div className={`bg-gradient-to-r ${currentNeon.bgTo} border ${currentNeon.border} rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between h-[210px] transition-all ${currentNeon.glow}`}>
                         <div className="absolute right-[-10px] top-[-10px] opacity-10 font-orbitron font-extrabold text-9xl text-white pointer-events-none select-none">NTC</div>
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="text-xs uppercase tracking-widest text-purple-200 font-semibold">Chave de Endereço</p>
                             <button onClick={() => setShowWalletAddress(!showWalletAddress)} className="text-[10px] text-purple-400 hover:text-purple-200 transition">
-                              {showWalletAddress ? '🔓 Esconder' : '🔒 Mostrar'}
+                              {showWalletAddress ? '🔒 Esconder' : '🔓 Mostrar'}
                             </button>
                           </div>
                           <span className="font-mono text-xs text-gray-300 bg-black/40 px-3 py-1 rounded-lg border border-purple-950 block mt-1 w-fit select-all">
@@ -1566,7 +1559,7 @@
                         <button 
                           type="submit" 
                           disabled={!targetUserFound}
-                          class={`px-5 py-2.5 rounded-xl font-orbitron font-bold text-xs transition flex items-center space-x-1.5 ${targetUserFound ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                          className={`px-5 py-2.5 rounded-xl font-orbitron font-bold text-xs transition flex items-center space-x-1.5 ${targetUserFound ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
                         >
                           <i data-lucide="send" className="w-3.5 h-3.5"></i>
                           <span>CONFIRMAR E TRANSFERIR</span>
@@ -1584,7 +1577,7 @@
                                 <p className="font-semibold text-gray-200">{tx.type}</p>
                                 <p className="text-[9px] text-gray-500">{tx.date}</p>
                               </div>
-                              <span class={`font-mono font-bold ${tx.amount > 0 ? 'text-green-400' : 'text-gray-400'}`}>{tx.amount > 0 ? `+${tx.amount.toFixed(2)}` : tx.amount.toFixed(2)}</span>
+                              <span className={`font-mono font-bold ${tx.amount > 0 ? 'text-green-400' : 'text-gray-400'}`}>{tx.amount > 0 ? `+${tx.amount.toFixed(2)}` : tx.amount.toFixed(2)}</span>
                             </div>
                           ))}
                         </div>
@@ -1624,7 +1617,7 @@
                         {spinCooldown > 0 ? (
                           <button disabled className="w-full py-2 bg-gray-900 text-gray-500 text-xs font-bold rounded-xl cursor-not-allowed">COOLDOWN: {spinCooldown}s</button>
                         ) : (
-                          <button onClick={spinWheel} disabled={isSpinning} class={`w-full py-2.5 ${currentNeon.bg} ${currentNeon.hoverBg} text-white font-orbitron text-xs font-bold rounded-xl transition`}>GIRAR ROLETA</button>
+                          <button onClick={spinWheel} disabled={isSpinning} className={`w-full py-2.5 ${currentNeon.bg} ${currentNeon.hoverBg} text-white font-orbitron text-xs font-bold rounded-xl transition`}>GIRAR ROLETA</button>
                         )}
                       </div>
 
@@ -1672,7 +1665,7 @@
                             {!unlockedFeatures.fusionEngine && (
                               <div className="absolute inset-0 bg-black/95 backdrop-blur-sm z-10 flex items-center justify-between px-3 text-xs">
                                 <span className="text-gray-400 font-bold">Destrave o Reator Fusion</span>
-                                <button onClick={() => unlockWidget('fusionEngine')} className="px-2.5 py-1 bg-pink-600 hover:bg-pink-500 rounded text-[10px] font-bold">Destravar (10 NTC)</button>
+                                <button type="button" onClick={() => unlockWidget('fusionEngine')} className="px-2.5 py-1 bg-pink-600 hover:bg-pink-500 rounded text-[10px] font-bold">Destravar (10 NTC)</button>
                               </div>
                             )}
                             <div>
@@ -1712,7 +1705,7 @@
                         <h3 className="text-xs font-orbitron font-bold text-purple-300 uppercase tracking-widest mb-3">Neon Molecular</h3>
                         <div className="grid grid-cols-5 gap-2">
                           {Object.keys(neonClasses).map((key) => (
-                            <button key={key} onClick={() => setActiveNeon(key)} class={`h-8 rounded-lg border ${key === activeNeon ? 'border-white' : 'border-transparent'} transition`} style={{ backgroundColor: neonClasses[key].shadow }}></button>
+                            <button key={key} onClick={() => setActiveNeon(key)} className={`h-8 rounded-lg border ${key === activeNeon ? 'border-white' : 'border-transparent'} transition`} style={{ backgroundColor: neonClasses[key].shadow }}></button>
                           ))}
                         </div>
                       </div>
@@ -1788,7 +1781,7 @@
                               <span className="block">&lt;meta property="og:description" content="Encontre e acelere na nossa resenha doméstica de forma segura." /&gt;</span>
                             </>
                           )}
-                          {seoAuths.analyticsTracker && <span className="block">&lt;script src="https://analytics.ntc-network.net/tracker.js" defer&gt;&lt;/script&gt;</span>}
+                          {seoAuths.analyticsTracker && <span class="block">&lt;script src="https://analytics.ntc-network.net/tracker.js" defer&gt;&lt;/script&gt;</span>}
                           {!seoAuths.googleCrawler && !seoAuths.openGraph && !seoAuths.analyticsTracker && <span className="text-gray-600 block">Ative as autorizações acima para visualizar as tags dinâmicas.</span>}
                         </div>
                       </div>
