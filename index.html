@@ -601,17 +601,33 @@
       };
 
       const generateAddressFromSeed = (seed) => {
-        let hash = 0;
         const cleanSeed = seed.trim().toLowerCase();
+        let hash = 0;
+        
+        // Primeiro hash da semente
         for (let i = 0; i < cleanSeed.length; i++) {
           hash = cleanSeed.charCodeAt(i) + ((hash << 5) - hash);
         }
-        let hex = '';
-        for (let i = 0; i < 8; i++) {
-          const value = (hash >> (i * 4)) & 0xF;
-          hex += value.toString(16);
+        
+        const cleanSeed = seed.trim().toLowerCase();
+        let hash = 0;
+        
+        // Primeiro hash da semente
+        for (let i = 0; i < cleanSeed.length; i++) {
+          hash = cleanSeed.charCodeAt(i) + ((hash << 5) - hash);
         }
-        return 'NTC0x' + hex.toUpperCase() + 'FC' + cleanSeed.substring(0, 3).toUpperCase();
+        
+        // Gera um hash longo e consistente usando função determinística
+        let hex = '';
+        let value = Math.abs(hash);
+        
+        // Itera para criar um endereço de 40 caracteres (como padrão Ethereum)
+        for (let i = 0; i < 40; i++) {
+          value = (value * 7) ^ cleanSeed.charCodeAt(i % cleanSeed.length);
+          hex += Math.abs(value % 16).toString(16);
+        }
+        
+        return 'NTC' + hex.substring(0, 40
       };
 
       // --- MÉTODOS DE CADASTRO E LOGIN ---
@@ -1495,8 +1511,15 @@
                       <div class={`bg-gradient-to-r ${currentNeon.bgTo} border ${currentNeon.border} rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between h-[210px] transition-all ${currentNeon.glow}`}>
                         <div className="absolute right-[-10px] top-[-10px] opacity-10 font-orbitron font-extrabold text-9xl text-white pointer-events-none select-none">NTC</div>
                         <div>
-                          <p className="text-xs uppercase tracking-widest text-purple-200 font-semibold">Chave de Endereço</p>
-                          <span className="font-mono text-xs text-gray-300 bg-black/40 px-3 py-1 rounded-lg border border-purple-950 block mt-1 w-fit select-all">{walletAddress}</span>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs uppercase tracking-widest text-purple-200 font-semibold">Chave de Endereço</p>
+                            <button onClick={() => setShowWalletAddress(!showWalletAddress)} className="text-[10px] text-purple-400 hover:text-purple-200 transition">
+                              {showWalletAddress ? '🔓 Esconder' : '🔒 Mostrar'}
+                            </button>
+                          </div>
+                          <span className="font-mono text-xs text-gray-300 bg-black/40 px-3 py-1 rounded-lg border border-purple-950 block mt-1 w-fit select-all">
+                            {showWalletAddress ? walletAddress : '•'.repeat(walletAddress.length || 20)}
+                          </span>
                         </div>
                         <div>
                           <p className="text-xs uppercase tracking-widest text-purple-200 font-semibold">Balanço Acumulado</p>
@@ -1928,14 +1951,14 @@
                           <p className="text-[10px] text-gray-400 mb-2 uppercase font-semibold">Código HTML para Copiar:</p>
                           <div className="bg-black/40 p-3 rounded-lg border border-purple-950/60 overflow-x-auto font-mono text-[9px] text-pink-400 select-all">
                             {embedType === 'send' ? 
-                              `<iframe src="${window.location.origin}?embed=send&wallet=${embedWallet || 'SUAWALLET'}&amount=${embedAmount}" width="400" height="200" style="border:none;border-radius:12px;"></iframe>`
-                              : `<iframe src="${window.location.origin}?embed=receive&wallet=${embedWallet || 'SUAWALLET'}" width="300" height="150" style="border:none;border-radius:12px;"></iframe>`
+                              `<iframe src="https://aceleradox.github.io/NTC-wallet/?embed=send&wallet=${embedWallet || 'SUAWALLET'}&amount=${embedAmount}" width="400" height="200" style="border:none;border-radius:12px;"></iframe>`
+                              : `<iframe src="https://aceleradox.github.io/NTC-wallet/?embed=receive&wallet=${embedWallet || 'SUAWALLET'}" width="300" height="150" style="border:none;border-radius:12px;"></iframe>`
                             }
                           </div>
                           <button onClick={() => {
                             const code = embedType === 'send' ? 
-                              `<iframe src="${window.location.origin}?embed=send&wallet=${embedWallet || 'SUAWALLET'}&amount=${embedAmount}" width="400" height="200" style="border:none;border-radius:12px;"></iframe>`
-                              : `<iframe src="${window.location.origin}?embed=receive&wallet=${embedWallet || 'SUAWALLET'}" width="300" height="150" style="border:none;border-radius:12px;"></iframe>`;
+                              `<iframe src="https://aceleradox.github.io/NTC-wallet/?embed=send&wallet=${embedWallet || 'SUAWALLET'}&amount=${embedAmount}" width="400" height="200" style="border:none;border-radius:12px;"></iframe>`
+                              : `<iframe src="https://aceleradox.github.io/NTC-wallet/?embed=receive&wallet=${embedWallet || 'SUAWALLET'}" width="300" height="150" style="border:none;border-radius:12px;"></iframe>`;
                             navigator.clipboard.writeText(code);
                             showToastMessage("Código copiado para clipboard!");
                           }} className="w-full mt-2 py-2 bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold rounded-lg transition">
