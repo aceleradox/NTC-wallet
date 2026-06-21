@@ -94,7 +94,7 @@
     
     // Definimos o schema do banco de dados (Tabelas e índices)
     db.version(1).stores({
-      users: "username, address, seed", // Chave primária: username
+      users: "username, address, seed, balance", // Chave primária: username
       transactions: "++id, username, toAddress, fromUser, amount, date, claimed",
       notes: "++id, username, text, color",
       reviews: "++id, author, title, host, vibe, timestamp",
@@ -127,7 +127,6 @@
   <script type="text/babel" data-presets="env,react">
     const { useState, useEffect, useRef } = React;
 
-    // Vocabulário para geração de frases sementes aleatórias
     const MNEMONIC_WORDS = [
       "matrix", "net", "cyber", "token", "neon", "flow", "delta", "fusion", 
       "protocol", "node", "quantum", "sync", "hash", "link", "grid", "shield", 
@@ -142,7 +141,6 @@
       customAvatar: { price: 3.0, label: "Identidade Holográfica", desc: "Libera a edição de fotos via link de avatar no perfil." }
     };
 
-    // Função para gerar nova semente de 12 palavras
     const generateNewSeed = () => {
       let words = [];
       for (let i = 0; i < 12; i++) {
@@ -152,7 +150,6 @@
       return words.join(' ');
     };
 
-    // Função determinística para gerar o endereço público da carteira
     const generateAddressFromSeed = (seed) => {
       const cleanSeed = seed.trim().toLowerCase();
       let hash = 0;
@@ -170,11 +167,18 @@
 
     function App() {
       // --- CONTROLES DE ESTADO GERAL ---
-      const [currentUser, setCurrentUser] = useState(null); // Objeto do usuário logado do Dexie
-      const [registeredUsers, setRegisteredUsers] = useState([]); // Lista para alternar contas locais
+      const [currentUser, setCurrentUser] = useState(null); 
+      const [registeredUsers, setRegisteredUsers] = useState([]); 
       const [activeTab, setActiveTab] = useState('auth'); 
       const [toast, setToast] = useState(null);
       const [showWalletAddress, setShowWalletAddress] = useState(false);
+
+      // --- CONFIGURAÇÃO DO GITHUB (LEDGER GLOBAL) ---
+      const [githubToken, setGithubToken] = useState(localStorage.getItem('ntc_gh_token') || '');
+      const [githubOwner, setGithubOwner] = useState(localStorage.getItem('ntc_gh_owner') || 'aceleradox');
+      const [githubRepo, setGithubRepo] = useState(localStorage.getItem('ntc_gh_repo') || 'NTC-wallet');
+      const [githubPath, setGithubPath] = useState(localStorage.getItem('ntc_gh_path') || 'database.json');
+      const [githubSyncStatus, setGithubSyncStatus] = useState('offline'); // 'offline' | 'loading' | 'synced' | 'unauthorized'
 
       // --- LOGIN / CADASTRO ---
       const [authMode, setAuthMode] = useState('login'); 
@@ -183,7 +187,7 @@
       const [generatedSeed, setGeneratedSeed] = useState('');
       const [authError, setAuthError] = useState('');
 
-      // --- BALANÇO E TRANSAÇÕES (DEXIE INDEXEDDB) ---
+      // --- BALANÇO E TRANSAÇÕES ---
       const [balance, setBalance] = useState(10.00);
       const [history, setHistory] = useState([]);
       const [sendTargetAddress, setSendTargetAddress] = useState('');
@@ -213,7 +217,6 @@
       const [activeNeon, setActiveNeon] = useState('purple');
       const [profileBio, setProfileBio] = useState('Nômade da rede de dados e explorador de Notoriety Coin.');
       const [profileAvatar, setProfileAvatar] = useState('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80');
-      const [avatarInput, setAvatarInput] = useState('');
       const [notesList, setNotesList] = useState([]);
       const [newNoteText, setNewNoteText] = useState('');
 
@@ -237,35 +240,39 @@
 
       const currentNeon = neonClasses[activeNeon] || neonClasses.purple;
 
-      // Função utilitária para renderizar ícones lucide com segurança, evitando ReferenceErrors
+      // Executa o Lucide com proteção
       const triggerLucide = () => {
         if (typeof window.lucide !== 'undefined' && window.lucide && typeof window.lucide.createIcons === 'function') {
           try {
             window.lucide.createIcons();
           } catch (e) {
-            console.warn("Erro ao instanciar os ícones do Lucide:", e);
+            console.warn("Lucide falhou:", e);
           }
         }
       };
 
-      // --- INICIALIZAR E CARREGAR DADOS DA DATABASE (INDEXEDDB) ---
+      // --- INICIALIZAÇÃO DO ECOSSISTEMA ---
       useEffect(() => {
-        loadRegisteredUsers();
-        loadAllReviews();
-        setTimeout(triggerLucide, 100);
+        const bootstrap = async () => {
+          await loadAllReviews();
+          await loadRegisteredUsers();
+          // Tenta sincronizar primeiro do JSON do repositório público (Leitura Global)
+          await pullFromGitHub();
+          setTimeout(triggerLucide, 150);
+        };
+        bootstrap();
       }, []);
 
-      // Atualiza ícones lucide em mudanças de estado cruciais
       useEffect(() => {
-        setTimeout(triggerLucide, 100);
-      }, [activeTab, currentUser, isSpinning, engines]);
+        setTimeout(triggerLucide, 150);
+      }, [activeTab, currentUser, isSpinning, engines, githubSyncStatus]);
 
       const loadRegisteredUsers = async () => {
         try {
           const list = await db.users.toArray();
           setRegisteredUsers(list);
         } catch (err) {
-          console.error("Falha ao ler usuários da base IndexedDB:", err);
+          console.error(err);
         }
       };
 
@@ -274,7 +281,7 @@
           const list = await db.reviews.reverse().toArray();
           setReviewsList(list);
         } catch (err) {
-          console.error("Falha ao carregar mural:", err);
+          console.error(err);
         }
       };
 
@@ -294,11 +301,9 @@
             setProfileBio(userObj.profileBio || 'Explorador da rede NTC.');
             setProfileAvatar(userObj.profileAvatar || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80');
             
-            // Carrega notas específicas do usuário
             const userNotes = await db.notes.where("username").equals(username).toArray();
             setNotesList(userNotes);
 
-            // Carrega transações
             const userTx = await db.transactions
               .where("username")
               .equals(username)
@@ -308,21 +313,259 @@
               .toArray();
             setHistory(userTx);
 
-            setToast({ message: `Sessão carregada para @${username}`, type: "success" });
+            setToast({ message: `Sessão @${username} carregada com sucesso!`, type: "success" });
             setActiveTab('dashboard');
           }
         } catch (err) {
-          console.error("Erro ao carregar dados do usuário do banco:", err);
+          console.error(err);
         }
       };
 
-      // Auto-login se já houver sessão ativa gravada na sessão ou no localStorage
       useEffect(() => {
         const savedSession = localStorage.getItem('ntc_logged_user');
         if (savedSession) {
           loadUserData(savedSession);
         }
       }, []);
+
+      // --- PROTOCOLO DE CONEXÃO COM O GITHUB (LEITURA E ESCRITA DO LEDGER) ---
+
+      // 1. PULL (Puxa os dados globais do github repositório e injeta no IndexedDB local)
+      const pullFromGitHub = async () => {
+        setGithubSyncStatus('loading');
+        try {
+          // Buscamos o database.json do próprio repositório no GitHub Pages de forma pública (sem autenticação)
+          // Usamos nocache para evitar o cache agressivo do GitHub Pages
+          const url = `./${githubPath}?nocache=${Date.now()}`;
+          const res = await fetch(url);
+          
+          if (!res.ok) {
+            // Se der 404, o arquivo ainda não foi gerado ou comitado no repositório
+            setGithubSyncStatus('offline');
+            return;
+          }
+
+          const globalData = await res.json();
+          
+          // Sincroniza usuários
+          if (globalData.users && globalData.users.length) {
+            for (let u of globalData.users) {
+              const localU = await db.users.get(u.username);
+              if (!localU || localU.balance !== u.balance) {
+                await db.users.put(u);
+              }
+            }
+          }
+
+          // Sincroniza transações
+          if (globalData.transactions && globalData.transactions.length) {
+            for (let tx of globalData.transactions) {
+              const localTx = await db.transactions.get(tx.id);
+              if (!localTx) {
+                await db.transactions.put(tx);
+              }
+            }
+          }
+
+          // Sincroniza relatos do feed
+          if (globalData.reviews && globalData.reviews.length) {
+            for (let rev of globalData.reviews) {
+              const localRev = await db.reviews.get(rev.id);
+              if (!localRev) {
+                await db.reviews.put(rev);
+              }
+            }
+          }
+
+          await loadRegisteredUsers();
+          await loadAllReviews();
+          setGithubSyncStatus('synced');
+          console.log("Banco de dados NTC sincronizado de database.json!");
+        } catch (err) {
+          console.warn("Falha de leitura direta do database.json:", err);
+          setGithubSyncStatus('offline');
+        }
+      };
+
+      // 2. PUSH (Compila o IndexedDB e grava via API do GitHub usando o Token PAT do administrador)
+      const pushToGitHub = async () => {
+        if (!githubToken) {
+          console.log("Sem token do GitHub configurado. Salvamento apenas em cache de navegador.");
+          return;
+        }
+
+        setGithubSyncStatus('loading');
+        try {
+          // Reunimos todos os dados locais
+          const users = await db.users.toArray();
+          const transactions = await db.transactions.toArray();
+          const notes = await db.notes.toArray();
+          const reviews = await db.reviews.toArray();
+
+          const payload = {
+            users,
+            transactions,
+            notes,
+            reviews,
+            updatedAt: new Date().toISOString(),
+            version: "2.5"
+          };
+
+          // 1. Precisamos buscar o SHA do arquivo atual no repositório do GitHub
+          const getFileUrl = `https://api.github.com/repos/${githubOwner}/${githubRepo}/contents/${githubPath}`;
+          let sha = "";
+
+          const getRes = await fetch(getFileUrl, {
+            headers: { "Authorization": `token ${githubToken}` }
+          });
+
+          if (getRes.ok) {
+            const fileData = await getRes.json();
+            sha = fileData.sha;
+          }
+
+          // 2. Escrevemos/Atualizamos o arquivo database.json usando PUT
+          const utf8B64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+          
+          const putBody = {
+            message: `NTC Ledger Auto-Sync Update [${new Date().toLocaleTimeString()}]`,
+            content: utf8B64
+          };
+          if (sha) {
+            putBody.sha = sha;
+          }
+
+          const putRes = await fetch(getFileUrl, {
+            method: "PUT",
+            headers: {
+              "Authorization": `token ${githubToken}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(putBody)
+          });
+
+          if (putRes.ok) {
+            setGithubSyncStatus('synced');
+            showToast("Ledger global do GitHub sincronizado com sucesso!");
+          } else {
+            const errDetails = await putRes.json();
+            console.error("GitHub API Error:", errDetails);
+            setGithubSyncStatus('unauthorized');
+            showToast("Falha de autenticação do token no GitHub.", "error");
+          }
+
+        } catch (err) {
+          console.error("Falha ao salvar no GitHub:", err);
+          setGithubSyncStatus('offline');
+        }
+      };
+
+      // Salva as credenciais do GitHub locais no localStorage
+      const handleSaveGithubSettings = async (e) => {
+        e.preventDefault();
+        localStorage.setItem('ntc_gh_token', githubToken);
+        localStorage.setItem('ntc_gh_owner', githubOwner);
+        localStorage.setItem('ntc_gh_repo', githubRepo);
+        localStorage.setItem('ntc_gh_path', githubPath);
+        showToast("Configurações do GitHub gravadas localmente!");
+        await pushToGitHub();
+      };
+
+      // --- EXPORTAR BANCO DE DADOS (Cria arquivo portátil JSON manual) ---
+      const handleExportDatabase = async () => {
+        try {
+          const users = await db.users.toArray();
+          const transactions = await db.transactions.toArray();
+          const notes = await db.notes.toArray();
+          const reviews = await db.reviews.toArray();
+          
+          const backupData = {
+            users,
+            transactions,
+            notes,
+            reviews,
+            exportedAt: new Date().toISOString(),
+            version: "2.5"
+          };
+
+          const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+            JSON.stringify(backupData, null, 2)
+          )}`;
+          
+          const downloadAnchor = document.createElement('a');
+          downloadAnchor.setAttribute("href", jsonString);
+          downloadAnchor.setAttribute("download", `ntc_ecosystem_db_${Date.now()}.json`);
+          document.body.appendChild(downloadAnchor);
+          downloadAnchor.click();
+          downloadAnchor.remove();
+
+          showToast("Matriz de banco exportada para arquivo JSON com sucesso!");
+        } catch (err) {
+          console.error("Erro ao exportar banco local:", err);
+          showToast("Erro crítico na compilação do arquivo de backup.", "error");
+        }
+      };
+
+      // --- IMPORTAR BANCO DE DADOS (Carrega o arquivo JSON e re-insere no Dexie) ---
+      const handleImportDatabase = (e) => {
+        const fileReader = new FileReader();
+        const file = e.target.files[0];
+        
+        if (!file) return;
+
+        fileReader.onload = async (event) => {
+          try {
+            const importedData = JSON.parse(event.target.result);
+            
+            if (!importedData.users || !importedData.transactions) {
+              showToast("Arquivo inválido. Formato de backup NTC corrompido.", "error");
+              return;
+            }
+
+            // Limpa as tabelas existentes para não dar colisão de chave primária
+            await db.users.clear();
+            await db.transactions.clear();
+            await db.notes.clear();
+            await db.reviews.clear();
+
+            // Insere os registros importados
+            if (importedData.users.length) {
+              await db.users.bulkAdd(importedData.users);
+            }
+            if (importedData.transactions.length) {
+              await db.transactions.bulkAdd(importedData.transactions);
+            }
+            if (importedData.notes && importedData.notes.length) {
+              await db.notes.bulkAdd(importedData.notes);
+            }
+            if (importedData.reviews && importedData.reviews.length) {
+              await db.reviews.bulkAdd(importedData.reviews);
+            }
+
+            showToast("Banco de Dados portátil sincronizado com sucesso!");
+            
+            await loadRegisteredUsers();
+            await loadAllReviews();
+            
+            if (importedData.users.length > 0) {
+              const firstUser = importedData.users[0].username;
+              localStorage.setItem('ntc_logged_user', firstUser);
+              await loadUserData(firstUser);
+            } else {
+              window.location.reload();
+            }
+
+            // Tenta salvar no GitHub se houver token
+            await pushToGitHub();
+
+          } catch (err) {
+            console.error("Erro na leitura da importação:", err);
+            showToast("Falha ao analisar a estrutura do arquivo JSON.", "error");
+          }
+        };
+
+        fileReader.readAsText(file);
+      };
 
       // --- SISTEMA DE REGISTRO SEGURO ---
       const handleRegisterRequest = (e) => {
@@ -367,11 +610,10 @@
         };
 
         try {
-          // Grava na IndexedDB
           await db.users.add(newUserObj);
           
-          // Grava primeira transação de boas-vindas
           await db.transactions.add({
+            id: 'TX-BOASVINDAS-' + Date.now(),
             username: name,
             toAddress: address,
             fromUser: "SISTEMA",
@@ -384,6 +626,9 @@
           await loadRegisteredUsers();
           await loadUserData(name);
           showToast("Sua identidade foi selada e criptografada com sucesso!");
+          
+          // Envia o novo registro imediatamente para o repositório se o token estiver ativado
+          await pushToGitHub();
         } catch (err) {
           setAuthError("Falha ao salvar conta no banco de dados.");
           console.error(err);
@@ -401,13 +646,11 @@
         }
 
         try {
-          // Procura no SQLite do navegador o usuário correspondente a esta semente
           const matchedUser = await db.users.where("seed").equals(seed).first();
           if (matchedUser) {
             localStorage.setItem('ntc_logged_user', matchedUser.username);
             await loadUserData(matchedUser.username);
           } else {
-            // Se não encontrou mas a semente é estruturalmente válida, oferece criar conta
             const generatedAddr = generateAddressFromSeed(seed);
             setAuthError(`Semente válida, mas nenhuma carteira associada neste terminal. Endereço gerado seria: ${generatedAddr.substring(0, 10)}...`);
           }
@@ -445,11 +688,11 @@
           };
           await db.notes.add(noteObj);
           
-          // Recarrega notas do banco
           const updatedNotes = await db.notes.where("username").equals(currentUser.username).toArray();
           setNotesList(updatedNotes);
           setNewNoteText('');
           showToast("Anotação fixa de segurança salva!");
+          await pushToGitHub();
         } catch (err) {
           console.error(err);
         }
@@ -460,6 +703,7 @@
           await db.notes.delete(id);
           setNotesList(notesList.filter(n => n.id !== id));
           showToast("Nota descartada.", "error");
+          await pushToGitHub();
         } catch (err) {
           console.error(err);
         }
@@ -478,7 +722,6 @@
         setIsValidatingAddress(true);
         const timer = setTimeout(async () => {
           try {
-            // Procura usuário pelo endereço de destino na base SQLite/IndexedDB local
             const matched = await db.users.where("address").equals(addressToFind).first();
             if (matched) {
               setTargetUserFound(matched);
@@ -528,18 +771,33 @@
           const receiverNewBalance = Number((targetUserFound.balance + amount).toFixed(4));
           await db.users.update(targetUserFound.username, { balance: receiverNewBalance });
 
-          // Grava log da transação
-          const txRecord = {
+          const transactionId = 'TX-TRANSFER-' + Date.now();
+
+          // Grava log da transação para o remetente
+          const txRecordSender = {
+            id: transactionId + '-S',
             username: currentUser.username,
+            toAddress: targetUserFound.address,
+            fromUser: currentUser.username,
+            amount: -amount,
+            date: new Date().toLocaleString(),
+            claimed: true
+          };
+          await db.transactions.add(txRecordSender);
+
+          // Grava log da transação para o destinatário
+          const txRecordReceiver = {
+            id: transactionId + '-R',
+            username: targetUserFound.username,
             toAddress: targetUserFound.address,
             fromUser: currentUser.username,
             amount: amount,
             date: new Date().toLocaleString(),
             claimed: true
           };
-          await db.transactions.add(txRecord);
+          await db.transactions.add(txRecordReceiver);
 
-          // Atualiza estados
+          // Atualiza estados do remetente logado
           setBalance(senderNewBalance);
           setSendTargetAddress('');
           setSendAmount('');
@@ -556,6 +814,9 @@
           setHistory(updatedHistory);
 
           showToast(`Sucesso! Enviado ${amount.toFixed(2)} NTC para @${targetUserFound.username}`);
+
+          // Envia a nova transação para o Ledger Global no GitHub Repo
+          await pushToGitHub();
         } catch (err) {
           console.error(err);
           showToast("Falha operacional ao processar transação no banco local.", "error");
@@ -580,7 +841,6 @@
         const chosenIndex = Math.floor(Math.random() * prizes.length);
         const win = prizes[chosenIndex];
 
-        // Roda a roleta pelo menos 4 vezes (1440 graus) mais a fatia correspondente
         spinRotation.current = spinRotation.current + 1440 + (chosenIndex * 60);
 
         setTimeout(async () => {
@@ -593,6 +853,7 @@
               await db.users.update(currentUser.username, { balance: newBal });
               
               await db.transactions.add({
+                id: 'TX-SPIN-' + Date.now(),
                 username: currentUser.username,
                 toAddress: currentUser.address,
                 fromUser: "SISTEMA (Roleta)",
@@ -603,7 +864,6 @@
 
               setBalance(newBal);
               
-              // Recarrega histórico
               const updatedHistory = await db.transactions
                 .where("username")
                 .equals(currentUser.username)
@@ -614,6 +874,7 @@
               setHistory(updatedHistory);
 
               showToast(`Você farmou +${win.value} NTC na roleta molecular!`);
+              await pushToGitHub();
             } catch (err) {
               console.error(err);
             }
@@ -621,7 +882,7 @@
             showToast("Vórtice instável. Nenhum NTC sintetizado desta vez.", "error");
           }
 
-          setSpinCooldown(45); // Cooldown curto de 45 segundos
+          setSpinCooldown(45); 
         }, 3200);
       };
 
@@ -662,6 +923,7 @@
           await db.users.update(currentUser.username, { balance: finalBal });
 
           await db.transactions.add({
+            id: 'TX-MINING-' + Date.now(),
             username: currentUser.username,
             toAddress: currentUser.address,
             fromUser: `MINERAÇÃO (${label})`,
@@ -672,7 +934,6 @@
 
           setBalance(finalBal);
           
-          // Ultrapassa e atualiza histórico
           const updatedHistory = await db.transactions
             .where("username")
             .equals(currentUser.username)
@@ -683,6 +944,7 @@
           setHistory(updatedHistory);
 
           showToast(`Ciclo completo! ${label} pagou +${reward} NTC.`);
+          await pushToGitHub();
         } catch (err) {
           console.error(err);
         }
@@ -704,7 +966,6 @@
         showToast(`Motor de indução "${engine.label}" iniciado!`);
       };
 
-      // --- ADQUIRIR UPGRADES (USANDO BALANÇO DE NTC LOCAL) ---
       const handleBuyUpgrade = async (key) => {
         const product = SHOP_ITEMS[key];
         if (!product) return;
@@ -724,6 +985,7 @@
           });
 
           await db.transactions.add({
+            id: 'TX-SHOP-' + Date.now(),
             username: currentUser.username,
             toAddress: "UPGRADE SHOP",
             fromUser: currentUser.username,
@@ -745,12 +1007,12 @@
           setHistory(updatedHistory);
 
           showToast(`Módulo "${product.label}" adicionado ao sistema!`);
+          await pushToGitHub();
         } catch (err) {
           console.error(err);
         }
       };
 
-      // --- MURAL DE COMENTÁRIOS E RESENHAS ---
       const handlePublishReview = async (e) => {
         e.preventDefault();
         if (!newReview.title || !newReview.host || !newReview.reviewText) {
@@ -765,6 +1027,7 @@
 
         try {
           const reviewObj = {
+            id: 'REV-' + Date.now(),
             author: currentUser.username,
             title: newReview.title.trim(),
             host: newReview.host.trim(),
@@ -775,12 +1038,12 @@
 
           await db.reviews.add(reviewObj);
 
-          // Oferece incentivo por relatar
           const incentiveReward = 1.50;
           const updatedBal = Number((balance + incentiveReward).toFixed(4));
           await db.users.update(currentUser.username, { balance: updatedBal });
 
           await db.transactions.add({
+            id: 'TX-REV-BONUS-' + Date.now(),
             username: currentUser.username,
             toAddress: currentUser.address,
             fromUser: "MURAL INCENTIVO",
@@ -794,7 +1057,6 @@
           
           await loadAllReviews();
           
-          // Atualiza histórico
           const updatedHistory = await db.transactions
             .where("username")
             .equals(currentUser.username)
@@ -805,12 +1067,12 @@
           setHistory(updatedHistory);
 
           showToast("Log de experiência adicionado! +1.50 NTC injetado.");
+          await pushToGitHub();
         } catch (err) {
           console.error(err);
         }
       };
 
-      // --- SALVAR INFORMAÇÕES DE BIOGRAFIA E AVATAR ---
       const handleUpdateProfile = async (e) => {
         e.preventDefault();
         try {
@@ -821,6 +1083,7 @@
           };
           await db.users.update(currentUser.username, updatedObj);
           showToast("Sinal de identidade modificado no banco!");
+          await pushToGitHub();
         } catch (err) {
           console.error(err);
         }
@@ -853,7 +1116,7 @@
               title: isSpend ? 'Autorizar Débito Seguro' : 'Coletar Recompensa Cyber',
               desc: isSpend
                 ? `O site parceiro ${event.origin} deseja retirar ${amountVal} NTC de sua conta para liberar: "${data.label || 'Item Digital'}"`
-                : `Você recebeu uma proposta de crédito de ${amountVal} NTC via "${data.label || 'Missão Completa'}".`,
+                : `Você recebeu uma proposta de crédito de ${amountVal} NTC via "${data.label || 'Missão Computada'}".`,
               amount: amountVal,
               label: data.label || 'Transação Segura',
               sourceWindow: event.source
@@ -899,6 +1162,7 @@
           try {
             await db.users.update(currentUser.username, { balance: nextBal });
             await db.transactions.add({
+              id: 'TX-EXTERNAL-' + Date.now(),
               username: currentUser.username,
               toAddress: isSpend ? "LOJA PARCEIRA" : currentUser.address,
               fromUser: isSpend ? currentUser.username : "RECOMPENSA PARCEIRA",
@@ -926,6 +1190,7 @@
             }, req.origin);
 
             showToast(isSpend ? `Transação concluída: -${req.amount} NTC` : `Recompensa aceita: +${req.amount} NTC`);
+            await pushToGitHub();
           } catch (err) {
             console.error(err);
           }
@@ -976,10 +1241,22 @@
                       <span className={`${currentNeon.text} font-bold`}>@{currentUser.username}</span>
                     </div>
                     
-                    <span className="text-emerald-400 flex items-center space-x-1" title="SQLite/IndexedDB Local Ativo">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span className="hidden md:inline font-mono">DB Conectado</span>
-                    </span>
+                    {githubSyncStatus === 'synced' ? (
+                      <span className="text-green-400 flex items-center space-x-1" title="Ledger Global sincronizado com database.json do repositório no GitHub Pages">
+                        <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+                        <span className="hidden md:inline font-mono text-[9px] uppercase tracking-wider">Ledger Sincronizado</span>
+                      </span>
+                    ) : githubSyncStatus === 'loading' ? (
+                      <span className="text-yellow-400 flex items-center space-x-1">
+                        <i data-lucide="refresh-cw" className="w-3 h-3 animate-spin"></i>
+                        <span className="hidden md:inline font-mono text-[9px] uppercase tracking-wider">Gravando Ledger...</span>
+                      </span>
+                    ) : (
+                      <span className="text-gray-500 flex items-center space-x-1" title="Banco operando em modo isolado local">
+                        <span className="h-2 w-2 rounded-full bg-gray-500"></span>
+                        <span className="hidden md:inline font-mono text-[9px] uppercase tracking-wider">DB Local</span>
+                      </span>
+                    )}
 
                     <button 
                       onClick={handleLogout} 
@@ -1054,19 +1331,19 @@
             
             {/* TELA DE AUTENTICAÇÃO */}
             {activeTab === 'auth' && (
-              <div className="flex-grow flex items-center justify-center py-10">
+              <div className="flex-grow flex flex-col items-center justify-center py-10 space-y-6">
                 <div className="w-full max-w-lg bg-[#080812] border border-purple-900/60 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
                   <div className="glow-overlay"></div>
                   
                   <div className="text-center mb-8 relative z-10">
-                    <span className="px-3.5 py-1.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/20 uppercase tracking-widest font-orbitron">
-                      IndexedDB SQLite Local Ativo
+                    <span className="px-3.5 py-1.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/20 uppercase tracking-widest font-orbitron animate-pulse">
+                      Ledger Global via GitHub Pages
                     </span>
                     <h2 className="text-4xl font-black font-orbitron mt-4 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-amber-300">
                       SECURE TERMINAL
                     </h2>
                     <p className="text-xs text-gray-400 mt-2 leading-relaxed">
-                      Seus dados e chaves sementes de Notoriety Coin são gravados localmente em um banco estruturado e transacional no seu navegador. Nenhuma informação viaja para servidores externos.
+                      Sua carteira criptográfica se sincroniza de forma automática e descentralizada carregando o arquivo <code className="text-pink-400 font-mono">database.json</code> do repositório de forma limpa.
                     </p>
                   </div>
 
@@ -1096,7 +1373,7 @@
 
                       {registeredUsers.length > 0 && (
                         <div className="pt-4 border-t border-purple-950/80">
-                          <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2">Perfis Locais Guardados no Banco</p>
+                          <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2">Perfis Locais Reconhecidos no Ledger</p>
                           <div className="grid grid-cols-2 gap-2 max-h-[120px] overflow-y-auto pr-1">
                             {registeredUsers.map((u) => (
                               <button
@@ -1162,6 +1439,33 @@
                   </div>
 
                 </div>
+
+                {/* SINC INTER-DISPOSITIVO MANUAL */}
+                <div className="w-full max-w-lg bg-[#080812] border border-pink-900/40 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                  <h3 className="text-xs font-orbitron font-bold text-pink-400 uppercase tracking-widest mb-2"> Sincronização e Backup Portátil</h3>
+                  <p className="text-[11px] text-gray-400 leading-normal mb-4">
+                    Se você não configurou o Token de Sincronização Automática com o seu Repositório do GitHub, use esta ferramenta para baixar ou importar sua carteira manualmente.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button 
+                      onClick={handleExportDatabase}
+                      className="py-2 px-3 bg-purple-950 hover:bg-purple-900 border border-purple-800 text-purple-300 text-xs font-semibold font-orbitron rounded-xl transition flex items-center justify-center space-x-1.5"
+                    >
+                      <span>📥 Exportar Banco (.json)</span>
+                    </button>
+                    
+                    <label className="py-2 px-3 bg-pink-950/80 hover:bg-pink-900 border border-pink-800 text-pink-300 text-xs font-semibold font-orbitron rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer text-center">
+                      <span>📤 Importar Banco (.json)</span>
+                      <input 
+                        type="file" 
+                        accept=".json" 
+                        onChange={handleImportDatabase} 
+                        className="hidden" 
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1170,7 +1474,7 @@
               <div className="space-y-6">
                 
                 {/* Menu Navegacional */}
-                <div className="flex border-b border-purple-950/60 overflow-x-auto text-sm">
+                <div className="flex border-b border-purple-950/60 overflow-x-auto text-sm font-semibold">
                   <button onClick={() => setActiveTab('dashboard')} className={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'dashboard' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
                     <i data-lucide="wallet" className="w-4 h-4"></i>
                     <span>Painel & Enviar</span>
@@ -1190,6 +1494,10 @@
                   <button onClick={() => setActiveTab('embed')} className={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'embed' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
                     <i data-lucide="code" className="w-4 h-4"></i>
                     <span>Widget Embed</span>
+                  </button>
+                  <button onClick={() => setActiveTab('backup-sync')} className={`pb-3 px-6 uppercase font-bold tracking-wider border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${activeTab === 'backup-sync' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                    <i data-lucide="refresh-cw" className="w-4 h-4"></i>
+                    <span>Sincronizar Arquivo</span>
                   </button>
                 </div>
 
@@ -1278,7 +1586,7 @@
                             </div>
                           ) : (
                             history.map((tx) => {
-                              const isNegative = tx.amount < 0 || tx.toAddress !== currentUser.address;
+                              const isNegative = tx.amount < 0;
                               return (
                                 <div key={tx.id} className="bg-black/40 border border-purple-950 p-3 rounded-xl flex justify-between items-center text-xs">
                                   <div>
@@ -1757,6 +2065,78 @@
                         <p className="text-[10px] text-gray-500 mt-4 text-center italic">Os blocos responsivos se alinham de maneira flexível a telas de mobile e desktop.</p>
                       </div>
 
+                    </div>
+                  </div>
+                )}
+
+                {/* ABA 6: CONFIGURAÇÃO DE SINCRONIZAÇÃO AUTOMÁTICA GITHUB */}
+                {activeTab === 'backup-sync' && (
+                  <div className="bg-[#080812] border border-purple-900/40 rounded-2xl p-6 space-y-6 animate-fadeIn">
+                    <h3 className="text-lg font-orbitron font-black text-purple-300 uppercase tracking-wider">Configuração de Ledger do GitHub</h3>
+                    <p className="text-xs text-gray-400 leading-normal">
+                      Insira o seu Token Pessoal do GitHub para permitir que este painel salve os novos registros e transações automaticamente como commits no arquivo <code className="text-pink-400 font-mono">database.json</code> do seu repositório.
+                    </p>
+
+                    <form onSubmit={handleSaveGithubSettings} className="space-y-4 max-w-xl">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] text-gray-500 uppercase font-mono mb-1">Dono do Repositório (Username)</label>
+                          <input 
+                            type="text" 
+                            value={githubOwner} 
+                            onChange={(e) => setGithubOwner(e.target.value)} 
+                            placeholder="Ex: aceleradox" 
+                            className="w-full bg-black/60 border border-purple-900/40 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-pink-500 text-white font-mono" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-500 uppercase font-mono mb-1">Nome do Repositório</label>
+                          <input 
+                            type="text" 
+                            value={githubRepo} 
+                            onChange={(e) => setGithubRepo(e.target.value)} 
+                            placeholder="Ex: NTC-wallet" 
+                            className="w-full bg-black/60 border border-purple-900/40 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-pink-500 text-white font-mono" 
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-gray-500 uppercase font-mono mb-1">GitHub Personal Access Token (PAT)</label>
+                        <input 
+                          type="password" 
+                          value={githubToken} 
+                          onChange={(e) => setGithubToken(e.target.value)} 
+                          placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+                          className="w-full bg-black/60 border border-purple-900/40 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-pink-500 text-white font-mono" 
+                        />
+                        <p className="text-[10px] text-gray-600 mt-1 italic">
+                          O token precisa ter permissões de escrita em conteúdos de repositório (<code className="text-purple-400">contents:write</code>). Ele fica salvo estritamente no cache local do seu navegador.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                        <button 
+                          type="submit" 
+                          className="py-2.5 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-bold font-orbitron text-xs rounded-xl transition shadow-lg"
+                        >
+                          CONECTAR E FORÇAR COMMIT
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={pullFromGitHub}
+                          className="py-2.5 bg-black border border-purple-900 text-purple-300 font-bold font-orbitron text-xs rounded-xl transition"
+                        >
+                          FORÇAR LEITURA (PULL)
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="p-4 bg-purple-950/20 border border-purple-900/30 rounded-xl text-xs text-gray-400 space-y-2">
+                      <p className="font-bold text-gray-200">Como funciona para outros usuários?</p>
+                      <p>
+                        Apenas você (ou administradores com o Token) precisam salvar a chave acima. Seus amigos e clientes não precisam configurar nada! O site deles lê o arquivo <code className="text-pink-400 font-mono">database.json</code> público automaticamente, garantindo que o saldo e carteiras de todos permaneçam 100% atualizados no ledger global.
+                      </p>
                     </div>
                   </div>
                 )}
